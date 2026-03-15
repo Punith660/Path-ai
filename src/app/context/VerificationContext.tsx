@@ -98,8 +98,11 @@ export function VerificationProvider({ children }: { children: React.ReactNode }
     const resumeText = (await extractText(input.file)).toLowerCase();
 
     // Simple skill keywords map - extend as needed
+    // include common variants and symbols such as C++ and C#
     const KEYWORDS: Record<string, { name: string; category: string }> = {
       javascript: { name: 'JavaScript', category: 'Frontend' },
+      'node.js': { name: 'Node.js', category: 'Backend' },
+      nodejs: { name: 'Node.js', category: 'Backend' },
       typescript: { name: 'TypeScript', category: 'Frontend' },
       react: { name: 'React', category: 'Frontend' },
       angular: { name: 'Angular', category: 'Frontend' },
@@ -107,13 +110,14 @@ export function VerificationProvider({ children }: { children: React.ReactNode }
       python: { name: 'Python', category: 'Backend' },
       django: { name: 'Django', category: 'Backend' },
       flask: { name: 'Flask', category: 'Backend' },
-      node: { name: 'Node.js', category: 'Backend' },
       golang: { name: 'Go', category: 'Backend' },
+      go: { name: 'Go', category: 'Backend' },
       java: { name: 'Java', category: 'Backend' },
       spring: { name: 'Spring', category: 'Backend' },
       kubernetes: { name: 'Kubernetes', category: 'DevOps' },
       docker: { name: 'Docker', category: 'DevOps' },
       aws: { name: 'AWS', category: 'Cloud' },
+      amazon: { name: 'AWS', category: 'Cloud' },
       azure: { name: 'Azure', category: 'Cloud' },
       gcp: { name: 'GCP', category: 'Cloud' },
       terraform: { name: 'Terraform', category: 'DevOps' },
@@ -126,13 +130,20 @@ export function VerificationProvider({ children }: { children: React.ReactNode }
       'machine learning': { name: 'Machine Learning', category: 'Data Science' },
       'deep learning': { name: 'Deep Learning', category: 'Data Science' },
       pandas: { name: 'Pandas', category: 'Data Science' },
-      numpy: { name: 'NumPy', category: 'Data Science' }
+      numpy: { name: 'NumPy', category: 'Data Science' },
+      'c++': { name: 'C++', category: 'Backend' },
+      cpp: { name: 'C++', category: 'Backend' },
+      'c#': { name: 'C#', category: 'Backend' },
+      dotnet: { name: '.NET', category: 'Backend' },
+      '.net': { name: '.NET', category: 'Backend' }
     };
 
     const found = new Map<string, { keyword: string; count: number }>();
     if (resumeText) {
       for (const kw of Object.keys(KEYWORDS)) {
-        const re = new RegExp(`\\b${kw.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'gi');
+        const esc = kw.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+        // use Unicode-aware word boundary: ensure kw isn't part of a longer alphanumeric token
+        const re = new RegExp(`(?<![A-Za-z0-9_])${esc}(?![A-Za-z0-9_])`, 'gi');
         const matches = resumeText.match(re);
         if (matches && matches.length > 0) {
           const key = KEYWORDS[kw].name;
