@@ -1,0 +1,189 @@
+"""
+FastAPI service for extracting clean text from resume files.
+
+Install dependencies:
+    pip install -r requirements.txt
+
+Start the server from the backend directory:
+    uvicorn main:app --reload
+"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+
+try:
+    from backend.parser.docx_parser import extract_text_from_docx
+    from backend.parser.pdf_parser import extract_text_from_pdf
+    from backend.parser.resume_parser import normalize_resume_text, parse_resume_text
+    from backend.scorer.scoring import score_verification
+    from backend.signals.consistency_signal import compute_consistency_signal
+    from backend.signals.depth_signal import compute_depth_signal
+    from backend.signals.skill_signal import compute_skill_signal
+    from backend.scoring.scorer import score_resume_text
+except ImportError:
+    from parser.docx_parser import extract_text_from_docx
+    from parser.pdf_parser import extract_text_from_pdf
+    from parser.resume_parser import normalize_resume_text, parse_resume_text
+    from scorer.scoring import score_verification
+    from signals.consistency_signal import compute_consistency_signal
+    from signals.depth_signal import compute_depth_signal
+    from signals.skill_signal import compute_skill_signal
+    from scoring.scorer import score_resume_text
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="Resume Text Extraction Service")
+
+MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
+PDF_CONTENT_TYPES = {"application/pdf"}
+DOCX_CONTENT_TYPES = {
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/octet-stream",
+}
+GENERIC_BINARY_CONTENT_TYPES = {"application/octet-stream", ""}
+
+
+class ResumeTextRequest(BaseModel):
+    text: str = Field(..., min_length=1)
+
+
+class VerifyRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=200_000)
+    github: str | None = Field(default=None, max_length=500)
+    linkedin: str | None = Field(default=None, max_length=500)
+
+
+def clean_text(text: str) -> str:
+    """Normalize extracted text while keeping readable line structure."""
+    return normalize_resume_text(text)
+
+
+def detect_file_kind(filename: str, content_type: str | None) -> str:
+    """Validate file type using both extension and content type."""
+    suffix = Path(filename).suffix.lower()
+    normalized_content_type = (content_type or "").lower()
+
+    if suffix == ".pdf" and normalized_content_type in (PDF_CONTENT_TYPES | GENERIC_BINARY_CONTENT_TYPES):
+        return "pdf"
+
+    if suffix == ".docx" and normalized_content_type in DOCX_CONTENT_TYPES:
+        return "docx"
+
+    raise HTTPException(
+        status_code=400,
+        detail="Unsupported file type. Only PDF and DOCX files are allowed.",
+    )
+
+
+def validate_file_signature(file_kind: str, file_bytes: bytes) -> None:
+    """Basic content sniffing to reject obviously spoofed uploads."""
+    if file_kind == "pdf":
+        if not file_bytes.startswith(b"%PDF"):
+            raise HTTPException(status_code=400, detail="Uploaded file is not a valid PDF.")
+        return
+
+    if file_kind == "docx":
+        if not file_bytes.startswith(b"PK"):
+            raise HTTPException(status_code=400, detail="Uploaded file is not a valid DOCX.")
+
+
+async def read_uploaded_file(upload: UploadFile) -> bytes:
+    data = await upload.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    if len(data) > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(status_code=413, detail="Uploaded file is too large.")
+    return data
+
+
+def ensure_extracted_text(cleaned_text: str) -> None:
+    if not cleaned_text:
+        raise HTTPException(
+            status_code=422,
+            detail="No extractable text found in the uploaded file.",
+        )
+
+
+@app.post("/extract-text")
+async def extract_text(file: UploadFile = File(...)) -> JSONResponse:
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename is required.")
+
+    file_kind = detect_file_kind(file.filename, file.content_type)
+    file_bytes = await read_uploaded_file(file)
+    validate_file_signature(file_kind, file_bytes)
+
+    try:
+        if file_kind == "pdf":
+            extracted_text = extract_text_from_pdf(file_bytes)
+        else:
+            extracted_text = extract_text_from_docx(file_bytes)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to parse uploaded file: %s", file.filename)
+        raise HTTPException(status_code=500, detail=str(exc) or "Failed to parse uploaded file.") from exc
+    finally:
+        await file.close()
+
+    cleaned_text = clean_text(extracted_text)
+    ensure_extracted_text(cleaned_text)
+    logger.info("Processed %s file: %s", file_kind, file.filename)
+    return JSONResponse(content={"text": cleaned_text})
+
+
+@app.post("/score-resume")
+async def score_resume(payload: ResumeTextRequest) -> JSONResponse:
+    cleaned_text = clean_text(payload.text)
+    if not cleaned_text:
+        raise HTTPException(status_code=400, detail="Resume text must not be empty.")
+
+    result = score_resume_text(cleaned_text)
+    logger.info("Scored resume text with confidence %.2f", result["confidence"])
+    return JSONResponse(content=result)
+
+
+@app.post("/verify")
+async def verify_resume(payload: VerifyRequest) -> JSONResponse:
+    cleaned_text = clean_text(payload.text)
+    if not cleaned_text:
+        raise HTTPException(status_code=400, detail="Resume text must not be empty.")
+
+    parsed_resume = parse_resume_text(cleaned_text)
+    skill_signal = compute_skill_signal(parsed_resume["skill_counts"])
+    depth_signal = compute_depth_signal(parsed_resume["text"], parsed_resume["skill_counts"])
+    consistency_signal = compute_consistency_signal(
+        skills_count=sum(parsed_resume["skill_counts"].values()),
+        years_experience=parsed_resume["years_experience"],
+        has_senior_title=parsed_resume["has_senior_title"],
+        depth_score=depth_signal["score"],
+    )
+
+    result = score_verification(
+        skills=parsed_resume["skills"],
+        skill_signal=skill_signal,
+        depth_signal=depth_signal,
+        consistency_signal=consistency_signal,
+    )
+
+    logger.info(
+        "Verified resume: confidence=%s risk=%s github=%s linkedin=%s",
+        result["confidence"],
+        result["risk"],
+        bool(payload.github and payload.github.strip()),
+        bool(payload.linkedin and payload.linkedin.strip()),
+    )
+    return JSONResponse(content=result)
