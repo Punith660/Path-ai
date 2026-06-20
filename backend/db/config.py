@@ -13,7 +13,7 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 
 DATABASE_URL: str = os.getenv(
     "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/pathai",
+    "postgresql://neondb_owner:npg_GBvJ2LRTtN7F@ep-spring-water-asn8p8e5.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require",
 )
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
