@@ -11,7 +11,7 @@ from ..verification.knowledge import SKILL_ALIASES
 from .classifier import aggregate_skill_level, classify_skill_evidence, indirect_skill_reference, _action_verb_count, _is_keyword_stuffed
 from .text import contains_phrase, snippet_signature, truncate_snippet
 
-EvidenceLevel = Literal["demonstrated", "supported", "mentioned", "weak", "missing"]
+EvidenceLevel = Literal["demonstrated", "supported", "weak", "missing", "inflated"]
 
 # Bonus when action verb appears in same sentence as skill mention
 _ACTION_VERB_BONUS = 0.15

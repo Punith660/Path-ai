@@ -25,11 +25,17 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy.orm import Session
+
+from backend.db.config import get_db, init_db as db_init
+from backend.db.service import get_ranking_detail, get_ranking_history, save_ranking_session
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+
+import asyncio
 
 from backend.analysis_engine import analyze_resume
 from backend.parser.docx_parser import extract_text_from_docx
@@ -38,6 +44,32 @@ from backend.parser.resume_parser import normalize_resume_text
 from backend.parser.extraction_quality import estimate_text_quality
 from backend.reporting.pdf_report import build_pdf_report
 from backend.scoring.scorer import score_resume_text
+
+
+class RankCandidateRequest(BaseModel):
+    """Single candidate entry for the /rank endpoint."""
+    name: str = Field(..., min_length=1, max_length=500)
+    text: str = Field(..., min_length=1, max_length=200_000)
+    job_description: str | None = Field(default=None, max_length=100_000)
+    strictness: str = Field(default="medium", pattern="^(low|medium|high)$")
+    cross_reference_sync: bool = True
+
+
+class RankRequest(BaseModel):
+    """Request body for ranking multiple candidates against a JD."""
+    job_description: str = Field(..., min_length=1, max_length=100_000)
+    candidates: list[RankCandidateRequest] = Field(..., min_length=1, max_length=100)
+    strictness: str = Field(default="medium", pattern="^(low|medium|high)$")
+    cross_reference_sync: bool = True
+
+
+class RankedCandidateResult(BaseModel):
+    """Single ranked candidate output entry."""
+    candidate_name: str
+    rank_score: float
+    compatibility: float
+    confidence: float
+    risk: float
 
 
 logging.basicConfig(
@@ -59,6 +91,16 @@ DEFAULT_CORS_ORIGINS = [
 
 
 app = FastAPI(title="Path-ai Verify API")
+
+
+@app.on_event("startup")
+async def on_startup():
+    """Initialize database tables on application startup."""
+    try:
+        db_init()
+        logger.info("Database tables created successfully.")
+    except Exception as exc:
+        logger.warning("Database initialization skipped: %s", exc)
 
 
 def _get_allowed_origins() -> list[str]:
@@ -323,6 +365,220 @@ async def generate_pdf_report(payload: PdfReportRequest):
             "Content-Length": str(len(pdf_bytes)),
         },
     )
+
+
+def _derive_name_from_filename(filename: str) -> str:
+    """Extract candidate name from filename by removing extension and replacing separators."""
+    stem = Path(filename).stem
+    # Replace common separators with spaces, then clean up
+    name = stem.replace("_", " ").replace("-", " ").replace(".", " ")
+    # Title-case and collapse whitespace
+    parts = name.split()
+    if not parts:
+        return filename
+    return " ".join(p.capitalize() for p in parts)
+
+
+def _extract_text_from_bytes(file_kind: str, file_bytes: bytes) -> str:
+    """Extract text from raw file bytes using the appropriate parser."""
+    if file_kind == "pdf":
+        extracted_text, _ = extract_text_from_pdf_detailed(file_bytes)
+    else:
+        extracted_text = extract_text_from_docx(file_bytes)
+    return clean_text(extracted_text)
+
+
+@app.post("/rank-files")
+async def rank_from_files(
+    job_description: str = Form(..., min_length=1, max_length=100_000),
+    files: list[UploadFile] = File(..., min_length=2, max_length=100),
+    strictness: str = Form(default="medium"),
+    cross_reference_sync: bool = Form(default=True),
+) -> JSONResponse:
+    """Upload multiple resume files + JD, extract text, rank candidates.
+    
+    Reuses the same deterministic pipeline as /rank and /verify.
+    Candidate names are derived from filenames when possible.
+    """
+    # Validate strictness server-side
+    if strictness not in ("low", "medium", "high"):
+        raise HTTPException(status_code=422, detail="strictness must be one of: low, medium, high")
+
+    logger.info(
+        "Rank-from-files: %d files submitted, strictness=%s",
+        len(files),
+        strictness,
+    )
+
+    # Process each file: detect type, extract text, derive name
+    candidates_data: list[tuple[str, str]] = []  # (name, text)
+
+    for upload in files:
+        if not upload.filename:
+            raise HTTPException(status_code=400, detail="Each uploaded file must have a filename.")
+
+        file_kind = detect_file_kind(upload.filename, upload.content_type)
+        file_bytes = await read_uploaded_file(upload)
+        validate_file_signature(file_kind, file_bytes)
+
+        try:
+            extracted_text = _extract_text_from_bytes(file_kind, file_bytes)
+        except Exception as exc:
+            logger.exception("Failed to parse file: %s", upload.filename)
+            raise HTTPException(
+                status_code=422,
+                detail=f"Failed to extract text from '{upload.filename}': {exc}",
+            ) from exc
+        finally:
+            await upload.close()
+
+        ensure_extracted_text(extracted_text)
+
+        name = _derive_name_from_filename(upload.filename)
+        candidates_data.append((name, extracted_text))
+        logger.info("Extracted text from %s (derived name: %s)", upload.filename, name)
+
+    # Build the same RankRequest payload and reuse the ranking logic
+    rank_payload = RankRequest(
+        job_description=job_description,
+        candidates=[
+            RankCandidateRequest(name=name, text=text)
+            for name, text in candidates_data
+        ],
+        strictness=strictness,
+        cross_reference_sync=cross_reference_sync,
+    )
+
+    results = await _execute_rank(rank_payload)
+
+    # Persist to database (best-effort)
+    try:
+        from backend.db.config import SessionLocal
+        db_local = SessionLocal()
+        try:
+            save_ranking_session(
+                db_local,
+                job_description=job_description,
+                strictness=strictness,
+                cross_reference_sync=cross_reference_sync,
+                results=results,
+            )
+            logger.info("Ranking session saved to database.")
+        finally:
+            db_local.close()
+    except Exception as exc:
+        logger.warning("Failed to save ranking session: %s", exc)
+
+    cleaned = _strip_internal_fields(results)
+    logger.info("Rank-from-files complete — %d candidates ranked", len(cleaned))
+    return JSONResponse(content=cleaned)
+
+
+async def _execute_rank(payload: RankRequest) -> list[dict[str, object]]:
+    """Shared ranking logic used by /rank and /rank-files."""
+    async def evaluate(candidate: RankCandidateRequest) -> dict[str, object]:
+        text = clean_text(candidate.text)
+        if not text:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Candidate '{candidate.name}' provided empty resume text.",
+            )
+
+        jd = candidate.job_description or payload.job_description
+        analysis = analyze_resume(
+            text,
+            jd,
+            candidate.strictness or payload.strictness,
+            candidate.cross_reference_sync if candidate.cross_reference_sync is not None else payload.cross_reference_sync,
+        )
+
+        compatibility = float(analysis["compatibility_score"])
+        confidence = float(analysis["confidence"])
+        risk = float(analysis["risk_score"])
+
+        rank_score = round(compatibility * 0.7 + confidence * 0.2 - risk * 0.1, 2)
+
+        return {
+            "candidate_name": candidate.name,
+            "rank_score": rank_score,
+            "compatibility": compatibility,
+            "confidence": confidence,
+            "risk": risk,
+            "_resume_text": text,  # internal field for persistence, stripped from response
+        }
+
+    results = await asyncio.gather(*[evaluate(c) for c in payload.candidates])
+    results.sort(key=lambda r: r["rank_score"], reverse=True)
+    return results
+
+
+def _strip_internal_fields(results: list[dict]) -> list[dict]:
+    """Remove internal-use-only fields before returning to the client."""
+    return [
+        {k: v for k, v in r.items() if not k.startswith("_")}
+        for r in results
+    ]
+
+
+@app.post("/rank", response_model=list[RankedCandidateResult])
+async def rank_candidates(
+    payload: RankRequest,
+    db: Session = Depends(get_db),
+) -> list[dict[str, object]]:
+    """Rank multiple candidates against a shared job description.
+
+    Each candidate is run through the same deterministic pipeline as /verify.
+    A composite rank_score is computed from the pipeline outputs.
+
+    Formula:
+      rank_score = compatibility_score * 0.7 + confidence * 0.2 - risk_score * 0.1
+    """
+    logger.info(
+        "Ranking %d candidates for JD (strictness=%s, cross_reference=%s)",
+        len(payload.candidates),
+        payload.strictness,
+        payload.cross_reference_sync,
+    )
+
+    results = await _execute_rank(payload)
+
+    # Persist to database (best-effort, non-blocking)
+    try:
+        save_ranking_session(
+            db,
+            job_description=payload.job_description,
+            strictness=payload.strictness,
+            cross_reference_sync=payload.cross_reference_sync,
+            results=results,
+        )
+        logger.info("Ranking session saved to database.")
+    except Exception as exc:
+        logger.warning("Failed to save ranking session: %s", exc)
+
+    cleaned = _strip_internal_fields(results)
+    logger.info("Ranking complete — %d candidates evaluated", len(results))
+    return cleaned
+
+
+@app.get("/rankings")
+async def list_rankings(
+    db: Session = Depends(get_db),
+    limit: int = 50,
+) -> list[dict]:
+    """Return the most recent ranking sessions (summary)."""
+    return get_ranking_history(db, limit=limit)
+
+
+@app.get("/rankings/{ranking_id}")
+async def get_ranking(
+    ranking_id: int,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return a single ranking session with full candidate results."""
+    detail = get_ranking_detail(db, ranking_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Ranking session not found.")
+    return detail
 
 
 if DIST_ASSETS_DIR.exists():

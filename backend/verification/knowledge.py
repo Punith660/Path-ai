@@ -113,7 +113,7 @@ STRICTNESS = {
     "high": {"min_evidence": 2, "missing_penalty": 42, "inflated_penalty": 24, "weak_threshold": 70},
 }
 
-EVIDENCE_LEVELS = frozenset({"demonstrated", "supported", "mentioned", "weak", "missing"})
+EVIDENCE_LEVELS = frozenset({"demonstrated", "supported", "weak", "missing", "inflated"})
 
 SECTION_WEIGHT = {
     "experience": 40,

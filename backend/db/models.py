@@ -1,0 +1,83 @@
+"""
+SQLAlchemy ORM models for the persistence MVP.
+
+Tables:
+  - jobs:            job descriptions used in ranking sessions
+  - candidates:      candidate names and resume texts
+  - rankings:        ranking sessions (one per /rank or /rank-files call)
+  - ranking_candidates: individual candidate results within a ranking session
+"""
+
+from __future__ import annotations
+
+import datetime
+
+from sqlalchemy import Column, Integer, Float, String, Text, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
+
+from backend.db.config import Base
+
+
+class Job(Base):
+    __tablename__ = "jobs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    description = Column(Text, nullable=False)
+    strictness = Column(String(16), nullable=False, default="medium")
+    cross_reference_sync = Column(Integer, nullable=False, default=1)  # boolean as int
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+    rankings = relationship("Ranking", back_populates="job")
+
+    def __repr__(self) -> str:
+        return f"<Job id={self.id}>"
+
+
+class Candidate(Base):
+    __tablename__ = "candidates"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(500), nullable=False)
+    text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+    ranking_entries = relationship("RankingCandidate", back_populates="candidate")
+
+    def __repr__(self) -> str:
+        return f"<Candidate id={self.id} name={self.name!r}>"
+
+
+class Ranking(Base):
+    __tablename__ = "rankings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+    job = relationship("Job", back_populates="rankings")
+    candidate_results = relationship(
+        "RankingCandidate",
+        back_populates="ranking",
+        order_by="RankingCandidate.rank_score.desc()",
+    )
+
+    def __repr__(self) -> str:
+        return f"<Ranking id={self.id}>"
+
+
+class RankingCandidate(Base):
+    __tablename__ = "ranking_candidates"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ranking_id = Column(Integer, ForeignKey("rankings.id"), nullable=False)
+    candidate_id = Column(Integer, ForeignKey("candidates.id"), nullable=False)
+    rank_score = Column(Float, nullable=False)
+    compatibility = Column(Float, nullable=False)
+    confidence = Column(Float, nullable=False)
+    risk = Column(Float, nullable=False)
+
+    ranking = relationship("Ranking", back_populates="candidate_results")
+    candidate = relationship("Candidate", back_populates="ranking_entries")
+
+    def __repr__(self) -> str:
+        return f"<RankingCandidate ranking_id={self.ranking_id} candidate_id={self.candidate_id} score={self.rank_score}>"

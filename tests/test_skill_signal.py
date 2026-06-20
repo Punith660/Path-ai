@@ -9,7 +9,6 @@ from backend.signals.skill_signal import (
     build_skill_claims,
     evidence_type,
     evidence_warning,
-    legacy_claim_status,
     pattern_claims,
     positive_risk_note,
     skill_order,
@@ -59,25 +58,6 @@ class TestEvidenceType:
         assert evidence_type("SQL", ["Worked on databases"]) == "direct"
 
 
-# ── legacy_claim_status ────────────────────────────────────────────────────
-
-class TestLegacyClaimStatus:
-    def test_demonstrated_returns_verified(self):
-        assert legacy_claim_status("demonstrated") == "verified"
-
-    def test_supported_returns_verified(self):
-        assert legacy_claim_status("supported") == "verified"
-
-    def test_mentioned_returns_likely(self):
-        assert legacy_claim_status("mentioned") == "likely"
-
-    def test_weak_returns_inflated(self):
-        assert legacy_claim_status("weak") == "inflated"
-
-    def test_missing_returns_inflated(self):
-        assert legacy_claim_status("missing") == "inflated"
-
-
 # ── evidence_warning ───────────────────────────────────────────────────────
 
 class TestEvidenceWarning:
@@ -87,8 +67,8 @@ class TestEvidenceWarning:
     def test_supported_no_warning(self):
         assert evidence_warning("supported") == ""
 
-    def test_mentioned_has_warning(self):
-        assert "skills" in evidence_warning("mentioned").lower()
+    def test_inflated_has_warning(self):
+        assert "skills" in evidence_warning("inflated").lower()
 
     def test_weak_has_warning(self):
         assert "weak" in evidence_warning("weak").lower()
@@ -107,7 +87,7 @@ class TestPositiveRiskNote:
 
     def test_not_demonstrated_returns_none(self):
         hits = [EvidenceHit(section="experience", snippet="some stuff", raw_sentence="", match_score=0.5)]
-        assert positive_risk_note("Python", "mentioned", hits) is None
+        assert positive_risk_note("Python", "inflated", hits) is None
 
     def test_kubernetes_gets_infra_note(self):
         hits = [EvidenceHit(section="experience", snippet="experience with Kubernetes", raw_sentence="", match_score=0.9)]
@@ -181,10 +161,10 @@ class TestPatternClaims:
 # ── build_missing_claims ───────────────────────────────────────────────────
 
 class TestBuildMissingClaims:
-    def test_missing_skill_has_inflated_status(self):
+    def test_missing_skill_has_missing_status(self):
         claims = build_missing_claims(["Kubernetes", "Terraform"], "medium")
         assert len(claims) == 2
-        assert all(c["status"] == "inflated" for c in claims)
+        assert all(c["status"] == "missing" for c in claims)
         assert all(c["evidence_level"] == "missing" for c in claims)
         assert all(c["evidence"] == [] for c in claims)
 
@@ -236,7 +216,7 @@ class TestBuildSkillClaims:
             set(),
         )
         for c in claims:
-            assert c["evidence_level"] in ("weak", "mentioned")
+            assert c["evidence_level"] in ("weak", "inflated")
 
     def test_missing_when_required_but_not_found(self):
         text = """Skills
@@ -262,10 +242,10 @@ class TestBuildEvidenceMap:
     def test_evidence_map_includes_warnings(self):
         raw_claims = [
             {"claim": "Python experience", "type": "skill", "skill": "Python", "evidence_level": "demonstrated",
-             "status": "verified", "confidence": 90, "evidence": [{"section": "experience", "snippet": "Built apps"}],
+             "status": "demonstrated", "confidence": 90, "evidence": [{"section": "experience", "snippet": "Built apps"}],
              "evidence_type": "direct"},
             {"claim": "Go experience", "type": "skill", "skill": "Go", "evidence_level": "missing",
-             "status": "inflated", "confidence": 5, "evidence": [], "evidence_type": "missing"},
+             "status": "missing", "confidence": 5, "evidence": [], "evidence_type": "missing"},
         ]
         mapped = build_evidence_map(raw_claims)
         assert len(mapped) == 2
@@ -274,7 +254,7 @@ class TestBuildEvidenceMap:
 
     def test_evidence_map_keys(self):
         raw = [{"claim": "Docker experience", "type": "skill", "skill": "Docker", "evidence_level": "supported",
-                "status": "verified", "confidence": 78, "evidence": [{"section": "experience", "snippet": "Used Docker"}],
+                "status": "supported", "confidence": 78, "evidence": [{"section": "experience", "snippet": "Used Docker"}],
                 "evidence_type": "direct"}]
         mapped = build_evidence_map(raw)
         keys = set(mapped[0].keys())

@@ -196,10 +196,10 @@ class TestBuzzwordResume:
         buzzwords_found = [w for w in ["rockstar", "ninja", "guru", "expert", "passionate"] if w in messages.lower()]
         assert len(buzzwords_found) >= 2, f"Expected buzzwords in findings, got: {messages[:200]}"
 
-    def test_claims_are_weak_or_mentioned(self):
+    def test_claims_are_weak_or_inflated(self):
         result = analyze_resume(BUZZWORD_RESUME, "", "medium", True)
         skill_claims = [c for c in result["claims"] if c["type"] == "skill"]
-        weak_or_below = [c for c in skill_claims if c["evidence_level"] in ("weak", "mentioned", "missing")]
+        weak_or_below = [c for c in skill_claims if c["evidence_level"] in ("weak", "inflated", "missing")]
         assert len(weak_or_below) >= len(skill_claims) * 0.5
 
     def test_consistency_findings_detect_buzzwords(self):
@@ -250,3 +250,54 @@ class TestMissingSkills:
         with_jd = analyze_resume(MISSING_SKILLS_RESUME, MISSING_SKILLS_JD, "medium", True)
         without_jd = analyze_resume(MISSING_SKILLS_RESUME, "", "medium", True)
         assert with_jd["risk_score"] >= without_jd["risk_score"]
+
+
+# ── Status exclusivity ─────────────────────────────────────────────────────
+
+VALID_STATUSES = frozenset({"demonstrated", "supported", "weak", "missing", "inflated"})
+
+class TestStatusExclusivity:
+    """Every claim must have exactly one status and evidence_level must match status."""
+
+    def test_claims_have_valid_statuses(self):
+        result = analyze_resume(STRONG_RESUME, "", "medium", True)
+        for c in result["claims"]:
+            assert c["status"] in VALID_STATUSES, f"Invalid status: {c['status']}"
+            assert c["evidence_level"] in VALID_STATUSES, f"Invalid evidence_level: {c['evidence_level']}"
+
+    def test_status_matches_evidence_level(self):
+        result = analyze_resume(STRONG_RESUME, "", "medium", True)
+        for c in result["claims"]:
+            assert c["status"] == c["evidence_level"], (
+                f"Claim '{c['claim']}' has status='{c['status']}' "
+                f"but evidence_level='{c['evidence_level']}'"
+            )
+
+    def test_evidence_map_status_matches(self):
+        result = analyze_resume(STRONG_RESUME, "", "medium", True)
+        for e in result["evidence"]:
+            assert e["status"] in VALID_STATUSES, f"Invalid status in evidence_map: {e['status']}"
+
+    def test_only_valid_statuses_across_all_resumes(self):
+        for resume, jd in [
+            (STRONG_RESUME, ""),
+            (BUZZWORD_RESUME, ""),
+            (OVERLAP_RESUME, ""),
+            (MISSING_SKILLS_RESUME, MISSING_SKILLS_JD),
+        ]:
+            result = analyze_resume(resume, jd, "medium", True)
+            for c in result["claims"]:
+                assert c["status"] == c["evidence_level"], (
+                    f"Claim '{c['claim']}' has status='{c['status']}' "
+                    f"but evidence_level='{c['evidence_level']}'"
+                )
+            for e in result["evidence"]:
+                assert e["status"] in VALID_STATUSES, f"Invalid status in evidence_map: {e['status']}"
+                assert e["evidence_level"] in (
+                    VALID_STATUSES | {None}
+                ), f"Invalid evidence_level in evidence_map: {e['evidence_level']}"
+                if e["evidence_level"] is not None:
+                    assert e["status"] == e["evidence_level"], (
+                        f"Evidence entry '{e['claim']}' has status='{e['status']}' "
+                        f"but evidence_level='{e['evidence_level']}'"
+                    )

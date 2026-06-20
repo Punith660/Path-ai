@@ -11,23 +11,14 @@ from ..parsers.section_parser import split_sentences_block
 from ..scoring.confidence import confidence_for_claim
 from ..verification.knowledge import BUZZWORDS
 
-EvidenceLevel = Literal["demonstrated", "supported", "mentioned", "weak", "missing"]
-
-
-def legacy_claim_status(level: EvidenceLevel) -> str:
-    """Map evidence level to API status string."""
-    if level in ("demonstrated", "supported"):
-        return "verified"
-    if level == "mentioned":
-        return "likely"
-    return "inflated"
+EvidenceLevel = Literal["demonstrated", "supported", "weak", "missing", "inflated"]
 
 
 def evidence_warning(level: EvidenceLevel) -> str:
     """Return warning string for a given evidence level."""
     if level in ("demonstrated", "supported"):
         return ""
-    if level == "mentioned":
+    if level == "inflated":
         return "Listed in skills without strong implementation context in experience or projects."
     if level == "weak":
         return "Weak or generic mention; add concrete implementation detail."
@@ -103,7 +94,7 @@ def pattern_claims(sections: dict[str, Any], strictness: str) -> list[dict[str, 
                 elif sec_weight in ("certifications", "education"):
                     lvl = "supported"
                 else:
-                    lvl = "mentioned" if len(sentence) < 90 else "supported"
+                    lvl = "inflated" if len(sentence) < 90 else "supported"
 
                 has_buzz = any(contains_phrase(sentence, w) for w in BUZZWORDS)
                 if has_buzz:
@@ -120,7 +111,7 @@ def pattern_claims(sections: dict[str, Any], strictness: str) -> list[dict[str, 
                         "value": value,
                         "claim": value,
                         "evidence_level": lvl,
-                        "status": legacy_claim_status(lvl),
+                        "status": lvl,
                         "confidence": conf,
                         "evidence": [{"section": section, "snippet": sentence[:240]}],
                         "evidence_type": "direct",
@@ -166,7 +157,7 @@ def build_skill_claims(
                 "value": skill,
                 "claim": f"{skill} experience",
                 "evidence_level": level,
-                "status": legacy_claim_status(level),
+                "status": level,
                 "confidence": conf,
                 "evidence": ev_objs,
                 "evidence_type": evidence_type(skill, snippets),
@@ -192,7 +183,7 @@ def build_missing_claims(
                 "value": skill,
                 "claim": f"{skill} (required by job description)",
                 "evidence_level": "missing",
-                "status": "inflated",
+                "status": "missing",
                 "confidence": confidence_for_claim(skill, "missing", [], strictness=strictness),
                 "evidence": [],
                 "evidence_type": "missing",

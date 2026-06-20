@@ -7,6 +7,7 @@ import {
   List, 
   FileSearch, 
   History, 
+  Trophy, 
   Settings, 
   HelpCircle 
 } from 'lucide-react';
@@ -22,7 +23,9 @@ const menu = [
   { icon: BarChart, label: 'Summary', path: '/summary' },
   { icon: List, label: 'Skills', path: '/skills' },
   { icon: FileSearch, label: 'Evidence', path: '/evidence' },
+  { icon: Trophy, label: 'Ranking', path: '/rank' },
   { icon: History, label: 'Reports', path: '/reports' },
+  { icon: History, label: 'Ranking History', path: '/ranking-history' },
 ];
 
 const subMenu = [

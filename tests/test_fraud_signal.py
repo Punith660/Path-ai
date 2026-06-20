@@ -16,19 +16,19 @@ from backend.signals.fraud_signal import (
 class TestCategorizeClaims:
     def test_inflated_contains_weak_and_missing(self):
         claims = [
-            {"evidence_level": "demonstrated", "status": "verified"},
-            {"evidence_level": "weak", "status": "inflated"},
-            {"evidence_level": "missing", "status": "inflated"},
-            {"evidence_level": "supported", "status": "verified"},
+            {"evidence_level": "demonstrated", "status": "demonstrated"},
+            {"evidence_level": "weak", "status": "weak"},
+            {"evidence_level": "missing", "status": "missing"},
+            {"evidence_level": "supported", "status": "supported"},
         ]
         inflated, verified = categorize_claims(claims)
-        assert len(inflated) == 2
-        assert len(verified) == 2
+        assert len(inflated) == 2  # weak + missing
+        assert len(verified) == 2  # demonstrated + supported
 
     def test_all_verified(self):
         claims = [
-            {"evidence_level": "demonstrated", "status": "verified"},
-            {"evidence_level": "supported", "status": "verified"},
+            {"evidence_level": "demonstrated", "status": "demonstrated"},
+            {"evidence_level": "supported", "status": "supported"},
         ]
         inflated, verified = categorize_claims(claims)
         assert len(inflated) == 0
@@ -36,21 +36,22 @@ class TestCategorizeClaims:
 
     def test_all_inflated(self):
         claims = [
-            {"evidence_level": "weak", "status": "inflated"},
-            {"evidence_level": "missing", "status": "inflated"},
+            {"evidence_level": "weak", "status": "weak"},
+            {"evidence_level": "missing", "status": "missing"},
+            {"evidence_level": "inflated", "status": "inflated"},
         ]
         inflated, verified = categorize_claims(claims)
-        assert len(inflated) == 2
+        assert len(inflated) == 3
         assert len(verified) == 0
 
-    def test_claim_can_appear_in_both_lists(self):
-        """evidence_level=supported + status=inflated hits both filters."""
+    def test_inflated_also_categorized_as_inflated(self):
+        """inflated evidence_level should be in the inflated bucket."""
         claims = [
-            {"evidence_level": "supported", "status": "inflated"},
+            {"evidence_level": "inflated", "status": "inflated"},
         ]
         inflated, verified = categorize_claims(claims)
         assert len(inflated) == 1
-        assert len(verified) == 1
+        assert len(verified) == 0
 
 
 # ── compute_weak_areas ─────────────────────────────────────────────────────
@@ -65,7 +66,7 @@ class TestComputeWeakAreas:
         assert any("action verbs" in a.lower() for a in areas)
 
     def test_weak_claims_counted(self):
-        claims = [{"evidence_level": "weak"}, {"evidence_level": "mentioned"}]
+        claims = [{"evidence_level": "weak"}, {"evidence_level": "inflated"}]
         areas = compute_weak_areas([], ["built"], claims)
         assert any("claim(s)" in a and "light" in a for a in areas)
 
@@ -159,7 +160,8 @@ class TestComputeConfidence:
             inflated_claims=[],
             action_verbs_list=["built", "tested"],
         )
-        assert 80 <= conf <= 100
+        # Reduced coefficients prevent saturation — expect moderate-high, not guaranteed >80
+        assert 50 <= conf <= 85
 
     def test_low_confidence_with_few_verified(self):
         conf = compute_confidence(

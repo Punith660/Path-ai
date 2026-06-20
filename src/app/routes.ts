@@ -7,6 +7,8 @@ import { Evidence } from "./pages/Evidence";
 import { Reports } from "./pages/Reports";
 import { Settings } from "./pages/Settings";
 import { Help } from "./pages/Help";
+import RankCandidates from "./pages/RankCandidates";
+import RankingHistory from "./pages/RankingHistory";
 
 export const router = createBrowserRouter([
   {
@@ -32,6 +34,14 @@ export const router = createBrowserRouter([
       {
         path: "reports",
         Component: Reports,
+      },
+      {
+        path: "rank",
+        Component: RankCandidates,
+      },
+      {
+        path: "ranking-history",
+        Component: RankingHistory,
       },
       {
         path: "settings",

@@ -51,7 +51,7 @@ def compute_consistency_findings(
         sk = str(c.get("skill", ""))
         if lvl in ("demonstrated", "supported", None):
             continue
-        if lvl == "mentioned":
+        if lvl == "inflated":
             consistency_findings.append(
                 {
                     "claim": f"{sk} appears in skills but lacks implementation evidence.",

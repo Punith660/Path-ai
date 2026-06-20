@@ -1,4 +1,4 @@
-"""Evidence quality levels: demonstrated, supported, mentioned, weak, missing."""
+"""Evidence quality levels: demonstrated, supported, weak, missing, inflated."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Literal
 from ..verification.knowledge import ACTION_VERBS, BUZZWORDS
 from .text import contains_phrase
 
-EvidenceLevel = Literal["demonstrated", "supported", "mentioned", "weak", "missing"]
+EvidenceLevel = Literal["demonstrated", "supported", "weak", "missing", "inflated"]
 
 _IMPLEMENTATION_SECTIONS = frozenset({"experience", "projects", "achievements"})
 _CONTEXT_SECTIONS = frozenset({"experience", "projects", "education", "certifications", "achievements"})
@@ -92,7 +92,7 @@ def classify_skill_evidence(
     if section == _SKILLS_ONLY_SECTION and only_skills_hits and not also_in_implementation:
         if _is_vague(sentence):
             return "weak"
-        return "mentioned"
+        return "inflated"
 
     if section in _IMPLEMENTATION_SECTIONS:
         # Keyword stuffing degrades even impl sentences
@@ -137,8 +137,8 @@ def aggregate_skill_level(
         return "missing" if required_by_jd else "weak"
     if not per_snippet_levels:
         return "weak"
-    priority = ["demonstrated", "supported", "mentioned", "weak", "missing"]
-    best: EvidenceLevel = "missing"
+    priority = ["demonstrated", "supported", "weak", "missing", "inflated"]
+    best: EvidenceLevel = "inflated"
     for lvl in per_snippet_levels:
         if priority.index(lvl) < priority.index(best):
             best = lvl
@@ -150,4 +150,3 @@ def indirect_skill_reference(skill: str, sentence: str) -> bool:
     if skill != "SQL":
         return False
     return bool(re.search(r"\b(postgres(?:ql)?|mysql|sqlite|relational\s+db)\b", sentence, re.I))
-

@@ -8,14 +8,14 @@ from typing import Literal
 from ..evidence.extractor import EvidenceHit
 from ..verification.knowledge import SECTION_WEIGHT, STRICTNESS
 
-EvidenceLevel = Literal["demonstrated", "supported", "mentioned", "weak", "missing"]
+EvidenceLevel = Literal["demonstrated", "supported", "weak", "missing", "inflated"]
 
 _LEVEL_BANDS: dict[EvidenceLevel, tuple[int, int]] = {
     "demonstrated": (85, 98),
     "supported": (70, 84),
-    "mentioned": (45, 69),
     "weak": (20, 44),
     "missing": (0, 19),
+    "inflated": (45, 69),
 }
 
 

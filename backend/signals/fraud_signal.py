@@ -9,7 +9,7 @@ from ..verification.knowledge import STRICTNESS
 
 def categorize_claims(claims: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Split claims into inflated and verified buckets based on evidence level."""
-    inflated = [c for c in claims if c.get("evidence_level") in {"weak", "missing"} or c["status"] == "inflated"]
+    inflated = [c for c in claims if c.get("evidence_level") in {"weak", "missing", "inflated"}]
     verified = [c for c in claims if c.get("evidence_level") in {"demonstrated", "supported"}]
     return inflated, verified
 
@@ -25,7 +25,7 @@ def compute_weak_areas(
         weak_areas.append(f"Missing JD skills: {', '.join(missing_skills_raw[:8])}")
     if not action_verbs_list:
         weak_areas.append("Resume lacks strong action verbs.")
-    weak_claims = [c for c in claims if c.get("evidence_level") in {"weak", "mentioned"}]
+    weak_claims = [c for c in claims if c.get("evidence_level") in {"weak", "inflated"}]
     if weak_claims:
         weak_areas.append(f"{len(weak_claims)} claim(s) rely mainly on skills-list or light context.")
     # New: flag when claims are missing project/experience backing
@@ -64,15 +64,26 @@ def compute_risk_score(
     strictness: str,
     cross_reference_sync: bool,
 ) -> int:
-    """Compute risk score based on JD mismatch, weak/missing support, and consistency issues."""
+    """Compute risk score based on credibility/suspicion signals, not job-fit gaps.
+
+    Risk is driven by:
+    - Inflated/unsupported claims (credibility)
+    - Cross-reference consistency issues (buzzwords, keyword stuffing)
+    - Lack of action verbs (weak evidence base)
+
+    Missing JD skills affect Compatibility, NOT Risk.
+    """
     st = STRICTNESS[strictness]
-    risk_score = 100 - compatibility
-    risk_score += len([c for c in inflated_claims if c.get("type") == "skill"]) * (st["inflated_penalty"] // 2)
-    risk_score += len(missing_skills_raw) * (st["missing_penalty"] // 10)
-    if not action_verbs_list:
-        risk_score += 16 if strictness == "high" else 10
+    # Risk starts at zero — driven by suspicious signals, not inverse of compatibility
+    risk_score = 0
+    # Inflated skill claims erode credibility
+    risk_score += len([c for c in inflated_claims if c.get("type") == "skill"]) * st["inflated_penalty"]
+    # Cross-reference findings (buzzwords, keyword stuffing, timeline issues)
     if cross_reference_sync:
-        risk_score += min(24, len(consistency_findings) * (8 if strictness == "high" else 5))
+        risk_score += min(40, len(consistency_findings) * (8 if strictness == "high" else 5))
+    # No action verbs = passive resume (weak signal)
+    if not action_verbs_list:
+        risk_score += 10 if strictness == "high" else 6
     return round(max(0, min(100, risk_score)))
 
 
@@ -82,16 +93,20 @@ def compute_confidence(
     inflated_claims: list[dict[str, Any]],
     action_verbs_list: list[str],
 ) -> int:
-    """Compute overall confidence score rewarding supported claims and discounting inflated ones."""
+    """Compute overall confidence score rewarding supported claims and discounting inflated ones.
+
+    Reduced coefficients prevent saturation — even exceptional resumes now cap below 100,
+    giving headroom for differentiation at the top end.
+    """
     return round(
         max(
             0,
             min(
                 100,
-                (compatibility * 0.78)
-                + (len(verified_claims) * 2.8)
-                + (len(action_verbs_list) * 1.2)
-                - (len(inflated_claims) * 4.2),
+                (compatibility * 0.60)
+                + (len(verified_claims) * 1.8)
+                + (len(action_verbs_list) * 0.5)
+                - (len(inflated_claims) * 3.5),
             ),
         )
     )
@@ -173,7 +188,7 @@ def aggregate_findings(
     for item in consistency_findings[:8]:
         if item.get("status") == "buzzword":
             findings.append({"message": str(item["claim"]), "severity": "medium"})
-        elif item.get("status") in ("mentioned", "weak", "missing"):
+        elif item.get("status") in ("inflated", "weak", "missing"):
             findings.append(
                 {"message": str(item["claim"]), "severity": "high" if item["status"] == "missing" else "medium"}
             )
