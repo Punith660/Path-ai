@@ -9,10 +9,13 @@ import {
   History, 
   Trophy, 
   Settings, 
-  HelpCircle 
+  HelpCircle,
+  LogOut,
+  LogIn
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useAuth } from '../context/AuthContext';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -35,6 +38,7 @@ const subMenu = [
 
 export function DashboardLayout() {
   const location = useLocation();
+  const { user, isAuthenticated, logout } = useAuth();
 
   return (
     <div className="flex min-h-screen bg-background text-foreground font-sans">
@@ -87,6 +91,35 @@ export function DashboardLayout() {
               {item.label}
             </NavLink>
           ))}
+        </div>
+
+        {/* User profile / Logout section */}
+        <div className="p-3 border-t border-sidebar-border mt-auto bg-secondary/20">
+          {isAuthenticated && user ? (
+            <div className="space-y-2">
+              <div className="px-2 py-1 bg-secondary/40 rounded border border-border/30">
+                <p className="text-xs font-semibold text-foreground truncate" title={user.username}>{user.username}</p>
+                <p className="text-[9px] text-electric-blue font-bold uppercase tracking-wider mt-0.5">
+                  {user.role}
+                </p>
+              </div>
+              <button
+                onClick={logout}
+                className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-destructive hover:bg-destructive/10 hover:text-destructive transition-all duration-150 border border-transparent hover:border-destructive/20 cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5 shrink-0" />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          ) : (
+            <NavLink
+              to="/login"
+              className="group flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-electric-blue hover:bg-electric-blue/10 transition-all duration-150 border border-transparent hover:border-electric-blue/20"
+            >
+              <LogIn className="w-3.5 h-3.5 shrink-0" />
+              <span>Sign In</span>
+            </NavLink>
+          )}
         </div>
       </aside>
 

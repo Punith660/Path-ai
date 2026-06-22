@@ -9,11 +9,46 @@ import { Settings } from "./pages/Settings";
 import { Help } from "./pages/Help";
 import RankCandidates from "./pages/RankCandidates";
 import RankingHistory from "./pages/RankingHistory";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import { Login } from "./pages/Login";
+import { Register } from "./pages/Register";
+
+function ProtectedRank() {
+  return (
+    <ProtectedRoute>
+      <RankCandidates />
+    </ProtectedRoute>
+  );
+}
+
+function ProtectedRankingHistory() {
+  return (
+    <ProtectedRoute>
+      <RankingHistory />
+    </ProtectedRoute>
+  );
+}
+
+function ProtectedDashboardLayout() {
+  return (
+    <ProtectedRoute>
+      <DashboardLayout />
+    </ProtectedRoute>
+  );
+}
 
 export const router = createBrowserRouter([
   {
+    path: "/login",
+    Component: Login,
+  },
+  {
+    path: "/register",
+    Component: Register,
+  },
+  {
     path: "/",
-    Component: DashboardLayout,
+    Component: ProtectedDashboardLayout,
     children: [
       {
         index: true,
@@ -37,11 +72,15 @@ export const router = createBrowserRouter([
       },
       {
         path: "rank",
-        Component: RankCandidates,
+        Component: ProtectedRank,
+      },
+      {
+        path: "ranking",
+        Component: ProtectedRank,
       },
       {
         path: "ranking-history",
-        Component: RankingHistory,
+        Component: ProtectedRankingHistory,
       },
       {
         path: "settings",
