@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from backend.signals.fraud_signal import (
+    _truly_inflated,
     aggregate_findings,
     categorize_claims,
     compute_confidence,
@@ -9,6 +10,30 @@ from backend.signals.fraud_signal import (
     compute_risk_score,
     compute_weak_areas,
 )
+
+
+# ── _truly_inflated ─────────────────────────────────────────────────────────
+
+class TestTrulyInflated:
+    def test_filters_to_evidence_level_inflated_only(self):
+        claims = [
+            {"evidence_level": "inflated", "skill": "React"},
+            {"evidence_level": "missing", "skill": "K8s"},
+            {"evidence_level": "weak", "skill": "Docker"},
+            {"evidence_level": "demonstrated", "skill": "Python"},
+        ]
+        result = _truly_inflated(claims)
+        assert len(result) == 1
+        assert result[0]["skill"] == "React"
+
+    def test_empty_when_no_inflated(self):
+        assert _truly_inflated([{"evidence_level": "missing"}]) == []
+        assert _truly_inflated([{"evidence_level": "weak"}]) == []
+        assert _truly_inflated([]) == []
+
+    def test_only_inflated_survives(self):
+        claims = [{"evidence_level": "inflated"}] * 3 + [{"evidence_level": "missing"}] * 5
+        assert len(_truly_inflated(claims)) == 3
 
 
 # ── categorize_claims ──────────────────────────────────────────────────────
@@ -113,25 +138,42 @@ class TestComputeRiskScore:
         )
         assert 0 <= score <= 20
 
-    def test_high_risk_with_many_missing_skills(self):
+    def test_missing_skills_do_not_raise_risk(self):
+        """Missing JD skills are job-fit gaps; they should NOT inflate risk."""
         score = compute_risk_score(
             compatibility=30,
-            inflated_claims=[{"type": "skill"}, {"type": "skill"}],
+            inflated_claims=[{"type": "skill", "evidence_level": "missing"}] * 8,
+            missing_skills_raw=["K8s", "Docker", "Terraform", "AWS"],
+            action_verbs_list=["built"],
+            consistency_findings=[{"status": "missing"}] * 8,
+            strictness="medium",
+            cross_reference_sync=True,
+        )
+        # No truly inflated claims, no buzzword/stuffing findings → risk stays low
+        assert score <= 10
+
+    def test_high_risk_with_truly_inflated_claims(self):
+        """Only claims with evidence_level=='inflated' drive risk."""
+        score = compute_risk_score(
+            compatibility=30,
+            inflated_claims=[{"type": "skill", "evidence_level": "inflated"},
+                             {"type": "skill", "evidence_level": "inflated"}],
             missing_skills_raw=["K8s", "Docker", "Terraform", "AWS"],
             action_verbs_list=[],
-            consistency_findings=[{"status": "missing"}],
+            consistency_findings=[{"status": "inflated"}, {"status": "inflated"}],
             strictness="high",
             cross_reference_sync=True,
         )
-        assert score >= 50
+        # 2*24 (high penalty) + min(40, 2*8) + 10 (no verbs) = 48 + 16 + 10 = 74
+        assert score >= 60
 
     def test_score_clamped_to_100(self):
         score = compute_risk_score(
             compatibility=0,
-            inflated_claims=[{"type": "skill"}] * 50,
+            inflated_claims=[{"type": "skill", "evidence_level": "inflated"}] * 50,
             missing_skills_raw=["A"] * 50,
             action_verbs_list=[],
-            consistency_findings=[{"status": "missing"}] * 10,
+            consistency_findings=[{"status": "inflated"}] * 10,
             strictness="high",
             cross_reference_sync=True,
         )
@@ -149,6 +191,32 @@ class TestComputeRiskScore:
         )
         assert score >= 0
 
+    def test_clean_resume_risk_0_to_20(self):
+        """Clean resumes with no inflated claims → risk 0-20."""
+        score = compute_risk_score(
+            compatibility=85,
+            inflated_claims=[],
+            missing_skills_raw=["K8s", "Docker"],
+            action_verbs_list=["built", "deployed", "tested"],
+            consistency_findings=[],
+            strictness="medium",
+            cross_reference_sync=True,
+        )
+        assert 0 <= score <= 20
+
+    def test_inflated_claims_increase_risk(self):
+        """Inflated claims should push risk up."""
+        score = compute_risk_score(
+            compatibility=80,
+            inflated_claims=[{"type": "skill", "evidence_level": "inflated", "skill": "FakeSkill"}],
+            missing_skills_raw=[],
+            action_verbs_list=["built"],
+            consistency_findings=[],
+            strictness="medium",
+            cross_reference_sync=False,
+        )
+        assert score >= 10  # 1*14 = 14
+
 
 # ── compute_confidence ─────────────────────────────────────────────────────
 
@@ -160,36 +228,65 @@ class TestComputeConfidence:
             inflated_claims=[],
             action_verbs_list=["built", "tested"],
         )
-        # Reduced coefficients prevent saturation — expect moderate-high, not guaranteed >80
-        assert 50 <= conf <= 85
+        # 90*0.75 + 4*1.8 + 2*0.5 = 67.5 + 7.2 + 1.0 = 75.7
+        # Strong candidates should reach 70+ — high end
+        assert 70 <= conf <= 90
 
     def test_low_confidence_with_few_verified(self):
         conf = compute_confidence(
             compatibility=20,
             verified_claims=[],
-            inflated_claims=[{"skill": "X"}, {"skill": "Y"}, {"skill": "Z"}],
+            inflated_claims=[{"skill": "X", "evidence_level": "inflated"},
+                             {"skill": "Y", "evidence_level": "inflated"},
+                             {"skill": "Z", "evidence_level": "inflated"}],
             action_verbs_list=[],
         )
+        # 20*0.75 - 3*3.5 = 15 - 10.5 = 4.5
         assert conf <= 40
 
     def test_confidence_in_0_100_range(self):
         conf = compute_confidence(
             compatibility=50,
             verified_claims=[{"skill": "A"}],
-            inflated_claims=[{"skill": "B"}],
+            inflated_claims=[{"skill": "B", "evidence_level": "inflated"}],
             action_verbs_list=["built"],
         )
+        # 50*0.75 + 1*1.8 + 1*0.5 - 1*3.5 = 37.5 + 1.8 + 0.5 - 3.5 = 36.3
         assert 0 <= conf <= 100
 
     def test_confidence_clamped_bottom(self):
         conf = compute_confidence(
             compatibility=0,
             verified_claims=[],
-            inflated_claims=[{"skill": "X"}] * 10,
+            inflated_claims=[{"skill": "X", "evidence_level": "inflated"}] * 10,
             action_verbs_list=[],
         )
         # Should not go below 0
         assert conf >= 0
+
+    def test_missing_claims_dont_punish_confidence(self):
+        """Missing evidence_level claims (job-fit gaps) should not reduce confidence."""
+        conf = compute_confidence(
+            compatibility=75,
+            verified_claims=[{"skill": "Python", "evidence_level": "demonstrated"}],
+            inflated_claims=[{"skill": "K8s", "evidence_level": "missing"},
+                             {"skill": "Docker", "evidence_level": "missing"}],
+            action_verbs_list=["built", "deployed"],
+        )
+        # 75*0.75 + 1*1.8 + 2*0.5 - 0*3.5 = 56.25 + 1.8 + 1.0 = 59.05
+        assert conf >= 55
+
+    def test_strong_resume_reaches_70_90(self):
+        """Strong candidates should score confidence 70-90."""
+        conf = compute_confidence(
+            compatibility=85,
+            verified_claims=[{"skill": "A"}, {"skill": "B"}, {"skill": "C"},
+                             {"skill": "D"}, {"skill": "E"}],
+            inflated_claims=[{"skill": "Fake", "evidence_level": "inflated"}],
+            action_verbs_list=["built", "deployed", "tested", "architected", "designed"],
+        )
+        # 85*0.75 + 5*1.8 + 5*0.5 - 1*3.5 = 63.75 + 9.0 + 2.5 - 3.5 = 71.75
+        assert 70 <= conf <= 90
 
 
 # ── aggregate_findings ─────────────────────────────────────────────────────

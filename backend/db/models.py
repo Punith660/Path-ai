@@ -12,10 +12,25 @@ from __future__ import annotations
 
 import datetime
 
-from sqlalchemy import Column, Integer, Float, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, Float, String, Text, DateTime, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 
 from backend.db.config import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    username = Column(String(100), unique=True, nullable=False, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    role = Column(String(20), nullable=False, default="candidate")  # "manager" | "candidate"
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<User id={self.id} username={self.username!r} role={self.role}>"
 
 
 class Job(Base):
@@ -52,6 +67,7 @@ class Ranking(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
 
     job = relationship("Job", back_populates="rankings")

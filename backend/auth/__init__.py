@@ -1,0 +1,1 @@
+"""Authentication module — minimal JWT-based auth with role support."""

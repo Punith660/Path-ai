@@ -17,6 +17,7 @@ def save_ranking_session(
     strictness: str,
     cross_reference_sync: bool,
     results: list[dict[str, object]],
+    user_id: int | None = None,
 ) -> Ranking:
     """Save a ranking session (job + candidates + results) and return the Ranking row."""
     # 1. Create or skip duplicate detection — always insert new rows
@@ -28,7 +29,7 @@ def save_ranking_session(
     db.add(job)
     db.flush()  # get job.id
 
-    ranking = Ranking(job_id=job.id)
+    ranking = Ranking(job_id=job.id, user_id=user_id)
     db.add(ranking)
     db.flush()  # get ranking.id
 
@@ -55,11 +56,13 @@ def save_ranking_session(
     return ranking
 
 
-def get_ranking_history(db: Session, limit: int = 50) -> list[dict]:
+def get_ranking_history(db: Session, limit: int = 50, user_id: int | None = None) -> list[dict]:
     """Return the most recent ranking sessions (summary only)."""
+    query = db.query(Ranking)
+    if user_id is not None:
+        query = query.filter(Ranking.user_id == user_id)
     rankings = (
-        db.query(Ranking)
-        .order_by(Ranking.created_at.desc())
+        query.order_by(Ranking.created_at.desc())
         .limit(limit)
         .all()
     )
@@ -76,9 +79,12 @@ def get_ranking_history(db: Session, limit: int = 50) -> list[dict]:
     return result
 
 
-def get_ranking_detail(db: Session, ranking_id: int) -> dict | None:
+def get_ranking_detail(db: Session, ranking_id: int, user_id: int | None = None) -> dict | None:
     """Return a single ranking session with full candidate results."""
-    ranking = db.query(Ranking).filter(Ranking.id == ranking_id).first()
+    query = db.query(Ranking).filter(Ranking.id == ranking_id)
+    if user_id is not None:
+        query = query.filter(Ranking.user_id == user_id)
+    ranking = query.first()
     if not ranking:
         return None
 

@@ -14,6 +14,17 @@ def categorize_claims(claims: list[dict[str, Any]]) -> tuple[list[dict[str, Any]
     return inflated, verified
 
 
+def _truly_inflated(claims: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Filter to claims with evidence_level == 'inflated' only.
+
+    Missing and weak evidence are job-fit or presentation gaps, NOT
+    credibility issues.  Only 'inflated' evidence level signifies that a
+    claim appears in a skills list without implementation context, which is
+    the true fraud/credibility signal.
+    """
+    return [c for c in claims if c.get("evidence_level") == "inflated"]
+
+
 def compute_weak_areas(
     missing_skills_raw: list[str],
     action_verbs_list: list[str],
@@ -67,20 +78,24 @@ def compute_risk_score(
     """Compute risk score based on credibility/suspicion signals, not job-fit gaps.
 
     Risk is driven by:
-    - Inflated/unsupported claims (credibility)
-    - Cross-reference consistency issues (buzzwords, keyword stuffing)
-    - Lack of action verbs (weak evidence base)
+    - Inflated/unsupported claims (credibility) — only claims with
+      evidence_level == 'inflated' count.  Missing-skill claims (job-fit
+      gaps) do NOT contribute to risk.
+    - Cross-reference consistency issues (buzzwords, keyword stuffing).
+    - Lack of action verbs (weak evidence base).
 
     Missing JD skills affect Compatibility, NOT Risk.
     """
     st = STRICTNESS[strictness]
     # Risk starts at zero — driven by suspicious signals, not inverse of compatibility
     risk_score = 0
-    # Inflated skill claims erode credibility
-    risk_score += len([c for c in inflated_claims if c.get("type") == "skill"]) * st["inflated_penalty"]
-    # Cross-reference findings (buzzwords, keyword stuffing, timeline issues)
+    # Only truly inflated skill claims erode credibility (skip missing/weak)
+    truly_inflated = _truly_inflated(inflated_claims)
+    risk_score += len([c for c in truly_inflated if c.get("type") == "skill"]) * st["inflated_penalty"]
+    # Cross-reference findings — exclude "missing" findings (those are job-fit gaps, not fraud)
     if cross_reference_sync:
-        risk_score += min(40, len(consistency_findings) * (8 if strictness == "high" else 5))
+        relevant = [f for f in consistency_findings if f.get("status") != "missing"]
+        risk_score += min(40, len(relevant) * (8 if strictness == "high" else 5))
     # No action verbs = passive resume (weak signal)
     if not action_verbs_list:
         risk_score += 10 if strictness == "high" else 6
@@ -95,18 +110,22 @@ def compute_confidence(
 ) -> int:
     """Compute overall confidence score rewarding supported claims and discounting inflated ones.
 
-    Reduced coefficients prevent saturation — even exceptional resumes now cap below 100,
-    giving headroom for differentiation at the top end.
+    Only claims with evidence_level == 'inflated' (not missing/weak) are
+    penalised — missing skills are job-fit gaps, not credibility issues.
+
+    Increased compatibility coefficient (0.75 vs prior 0.60) so strong
+    candidates reach 70-90 range.
     """
+    truly_inflated = _truly_inflated(inflated_claims)
     return round(
         max(
             0,
             min(
                 100,
-                (compatibility * 0.60)
+                (compatibility * 0.75)
                 + (len(verified_claims) * 1.8)
                 + (len(action_verbs_list) * 0.5)
-                - (len(inflated_claims) * 3.5),
+                - (len(truly_inflated) * 3.5),
             ),
         )
     )
@@ -133,8 +152,9 @@ def compute_confidence_reason(
         reasons.append("no verified claims")
     if demonstrated_exp_proj > 0:
         reasons.append(f"{demonstrated_exp_proj} experience/project achievement(s) confirmed")
-    if inflated_claims:
-        reasons.append(f"{len(inflated_claims)} inflated claim(s) lowering trust")
+    truly_inflated = _truly_inflated(inflated_claims)
+    if truly_inflated:
+        reasons.append(f"{len(truly_inflated)} inflated claim(s) lowering trust")
     if not action_verbs_list:
         reasons.append("no action verbs detected")
     return "; ".join(reasons)

@@ -30,6 +30,9 @@ from sqlalchemy.orm import Session
 
 from backend.db.config import get_db, init_db as db_init
 from backend.db.service import get_ranking_detail, get_ranking_history, save_ranking_session
+from backend.auth.depends import get_current_user, require_role
+from backend.auth.routes import router as auth_router
+from backend.db.models import User
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -91,6 +94,7 @@ DEFAULT_CORS_ORIGINS = [
 
 
 app = FastAPI(title="Path-ai Verify API")
+app.include_router(auth_router)
 
 
 @app.on_event("startup")
@@ -196,6 +200,39 @@ def ensure_extracted_text(cleaned_text: str) -> None:
 @app.get("/health")
 async def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# ── Protected endpoints (auth MVP) ────────────────────────────────────────────
+
+
+@app.get("/api/protected/manager-only")
+async def manager_only(current_user: User = Depends(require_role("manager"))):
+    """Example endpoint accessible only by users with role=manager."""
+    return {
+        "message": "This endpoint is restricted to managers.",
+        "user": current_user.username,
+        "role": current_user.role,
+    }
+
+
+@app.get("/api/protected/me")
+async def protected_me(current_user: User = Depends(get_current_user)):
+    """Example endpoint accessible by any authenticated user (any role)."""
+    return {
+        "message": "You are authenticated.",
+        "user": current_user.username,
+        "role": current_user.role,
+    }
+
+
+@app.get("/api/protected/candidate-only")
+async def candidate_only(current_user: User = Depends(require_role("candidate"))):
+    """Example endpoint accessible only by users with role=candidate."""
+    return {
+        "message": "This endpoint is restricted to candidates.",
+        "user": current_user.username,
+        "role": current_user.role,
+    }
 
 
 @app.post("/extract-text")
@@ -394,6 +431,7 @@ async def rank_from_files(
     files: list[UploadFile] = File(..., min_length=2, max_length=100),
     strictness: str = Form(default="medium"),
     cross_reference_sync: bool = Form(default=True),
+    current_user: User = Depends(get_current_user),
 ) -> JSONResponse:
     """Upload multiple resume files + JD, extract text, rank candidates.
     
@@ -462,6 +500,7 @@ async def rank_from_files(
                 strictness=strictness,
                 cross_reference_sync=cross_reference_sync,
                 results=results,
+                user_id=current_user.id,
             )
             logger.info("Ranking session saved to database.")
         finally:
@@ -524,6 +563,7 @@ def _strip_internal_fields(results: list[dict]) -> list[dict]:
 async def rank_candidates(
     payload: RankRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> list[dict[str, object]]:
     """Rank multiple candidates against a shared job description.
 
@@ -550,6 +590,7 @@ async def rank_candidates(
             strictness=payload.strictness,
             cross_reference_sync=payload.cross_reference_sync,
             results=results,
+            user_id=current_user.id,
         )
         logger.info("Ranking session saved to database.")
     except Exception as exc:
@@ -564,18 +605,20 @@ async def rank_candidates(
 async def list_rankings(
     db: Session = Depends(get_db),
     limit: int = 50,
+    current_user: User = Depends(get_current_user),
 ) -> list[dict]:
     """Return the most recent ranking sessions (summary)."""
-    return get_ranking_history(db, limit=limit)
+    return get_ranking_history(db, limit=limit, user_id=current_user.id)
 
 
 @app.get("/rankings/{ranking_id}")
 async def get_ranking(
     ranking_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     """Return a single ranking session with full candidate results."""
-    detail = get_ranking_detail(db, ranking_id)
+    detail = get_ranking_detail(db, ranking_id, user_id=current_user.id)
     if detail is None:
         raise HTTPException(status_code=404, detail="Ranking session not found.")
     return detail

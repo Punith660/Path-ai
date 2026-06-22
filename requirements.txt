@@ -12,6 +12,9 @@ pytesseract
 Pillow
 opencv-python-headless
 python-multipart==0.0.9
+passlib[bcrypt]
+python-jose[cryptography]
+bcrypt==4.1.3
 starlette
 anyio
 annotated-doc

@@ -1,13 +1,9 @@
-node_modules
-dist
-.env
-
-*.db
 node_modules/
+*.db
 __pycache__/
 *.pyc
+.env
+.env.*
 *.log
 *.out
 *.err
-.env
-.env.*
