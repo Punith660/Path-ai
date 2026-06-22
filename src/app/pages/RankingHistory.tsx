@@ -46,9 +46,32 @@ export default function RankingHistory() {
     async function fetchSessions() {
       setLoading(true);
       setError(null);
+      const token = localStorage.getItem('token') || 
+                    localStorage.getItem('access_token') || 
+                    localStorage.getItem('auth_token') || 
+                    localStorage.getItem('pathai_token');
+      if (!token) {
+        setError('Authentication token is missing. Please log in first.');
+        setLoading(false);
+        return;
+      }
+
       try {
         const endpoint = API_BASE_URL ? `${API_BASE_URL}/rankings` : '/rankings';
-        const response = await fetch(endpoint);
+        const response = await fetch(endpoint, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.status === 401) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('pathai_token');
+          throw new Error('Your session has expired or the token is invalid. Please log in again.');
+        }
+
         if (!response.ok) throw new Error('Failed to load ranking history.');
         const data = (await response.json()) as RankingSummary[];
         setSessions(data);
@@ -71,11 +94,35 @@ export default function RankingHistory() {
     // Load detail if not cached
     if (!detailCache[sessionId]) {
       setLoadingDetail(sessionId);
+      const token = localStorage.getItem('token') || 
+                    localStorage.getItem('access_token') || 
+                    localStorage.getItem('auth_token') || 
+                    localStorage.getItem('pathai_token');
+      if (!token) {
+        setError('Authentication token is missing. Please log in first.');
+        setLoadingDetail(null);
+        return;
+      }
+
       try {
         const endpoint = API_BASE_URL
           ? `${API_BASE_URL}/rankings/${sessionId}`
           : `/rankings/${sessionId}`;
-        const response = await fetch(endpoint);
+        const response = await fetch(endpoint, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.status === 401) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('pathai_token');
+          setError('Your session has expired or the token is invalid. Please log in again.');
+          throw new Error('Your session has expired or the token is invalid. Please log in again.');
+        }
+
         if (!response.ok) throw new Error('Failed to load ranking details.');
         const data = (await response.json()) as RankingDetail;
         setDetailCache((prev) => ({ ...prev, [sessionId]: data }));

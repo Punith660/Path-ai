@@ -125,6 +125,16 @@ export default function RankCandidates() {
     setLoading(true);
     setResults(null);
 
+    const token = localStorage.getItem('token') || 
+                  localStorage.getItem('access_token') || 
+                  localStorage.getItem('auth_token') || 
+                  localStorage.getItem('pathai_token');
+    if (!token) {
+      setError('Authentication token is missing. Please log in to perform candidate ranking.');
+      setLoading(false);
+      return;
+    }
+
     try {
       const formData = new FormData();
       formData.append('job_description', jobDescription);
@@ -135,8 +145,19 @@ export default function RankCandidates() {
       const endpoint = API_BASE_URL ? `${API_BASE_URL}/rank-files` : '/rank-files';
       const response = await fetch(endpoint, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         body: formData,
       });
+
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('pathai_token');
+        throw new Error('Your session has expired or the token is invalid. Please log in again.');
+      }
 
       if (!response.ok) {
         const errText = await response.text();
@@ -166,11 +187,24 @@ export default function RankCandidates() {
     setLoading(true);
     setResults(null);
 
+    const token = localStorage.getItem('token') || 
+                  localStorage.getItem('access_token') || 
+                  localStorage.getItem('auth_token') || 
+                  localStorage.getItem('pathai_token');
+    if (!token) {
+      setError('Authentication token is missing. Please log in to perform candidate ranking.');
+      setLoading(false);
+      return;
+    }
+
     try {
       const endpoint = API_BASE_URL ? `${API_BASE_URL}/rank` : '/rank';
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           job_description: jobDescription,
           candidates: valid.map((c) => ({
@@ -179,6 +213,14 @@ export default function RankCandidates() {
           })),
         }),
       });
+
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('pathai_token');
+        throw new Error('Your session has expired or the token is invalid. Please log in again.');
+      }
 
       if (!response.ok) {
         const errText = await response.text();
