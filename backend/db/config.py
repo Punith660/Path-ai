@@ -35,5 +35,10 @@ def get_db():
 
 
 def init_db():
-    """Create all tables. Call once on startup."""
+    """Create all tables and run pending migrations. Call once on startup."""
     Base.metadata.create_all(bind=engine)
+    try:
+        from backend.db.migrate import run_migrations
+        run_migrations()
+    except Exception:
+        pass
