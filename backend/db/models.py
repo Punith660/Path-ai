@@ -2,10 +2,12 @@
 SQLAlchemy ORM models for the persistence MVP.
 
 Tables:
-  - jobs:            job descriptions used in ranking sessions
-  - candidates:      candidate names and resume texts
-  - rankings:        ranking sessions (one per /rank or /rank-files call)
+  - users:            authentication users
+  - jobs:             job descriptions used in ranking sessions
+  - candidates:       candidate names and resume texts
+  - rankings:         ranking sessions (one per /rank or /rank-files call)
   - ranking_candidates: individual candidate results within a ranking session
+  - reports:          persisted verification reports owned by users
 """
 
 from __future__ import annotations
@@ -28,6 +30,8 @@ class User(Base):
     role = Column(String(20), nullable=False, default="candidate")  # "manager" | "candidate"
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+    reports = relationship("Report", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<User id={self.id} username={self.username!r} role={self.role}>"
@@ -97,3 +101,28 @@ class RankingCandidate(Base):
 
     def __repr__(self) -> str:
         return f"<RankingCandidate ranking_id={self.ranking_id} candidate_id={self.candidate_id} score={self.rank_score}>"
+
+
+class Report(Base):
+    """Persisted verification report owned by a user."""
+
+    __tablename__ = "reports"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    candidate_name = Column(String(500), nullable=False, default="Unknown Candidate")
+    job_description = Column(Text, nullable=False, default="")
+    risk_score = Column(Integer, nullable=False, default=0)
+    confidence = Column(Integer, nullable=False, default=0)
+    compatibility_score = Column(Integer, nullable=False, default=0)
+    verdict = Column(String(50), nullable=False, default="unknown")
+    strictness = Column(String(16), nullable=False, default="medium")
+    cross_reference_sync = Column(Integer, nullable=False, default=1)  # boolean as int
+    # Full analysis payload stored as JSON
+    analysis_data = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+    user = relationship("User", back_populates="reports")
+
+    def __repr__(self) -> str:
+        return f"<Report id={self.id} user_id={self.user_id} candidate={self.candidate_name!r}>"

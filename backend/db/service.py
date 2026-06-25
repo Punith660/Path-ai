@@ -79,6 +79,31 @@ def get_ranking_history(db: Session, limit: int = 50, user_id: int | None = None
     return result
 
 
+def delete_ranking_session(db: Session, ranking_id: int, user_id: int) -> bool:
+    """Delete a ranking session owned by the given user.
+    
+    Removes the ranking, its candidate results, and the associated job.
+    Returns True if deleted, False if not found or not owned.
+    """
+    query = db.query(Ranking).filter(Ranking.id == ranking_id)
+    query = query.filter(Ranking.user_id == user_id)
+    ranking = query.first()
+    if not ranking:
+        return False
+
+    # Delete child ranking_candidate rows
+    for rc in ranking.candidate_results:
+        db.delete(rc)
+
+    # Delete the job if it exists
+    if ranking.job:
+        db.delete(ranking.job)
+
+    db.delete(ranking)
+    db.commit()
+    return True
+
+
 def get_ranking_detail(db: Session, ranking_id: int, user_id: int | None = None) -> dict | None:
     """Return a single ranking session with full candidate results."""
     query = db.query(Ranking).filter(Ranking.id == ranking_id)

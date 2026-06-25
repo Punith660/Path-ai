@@ -29,7 +29,12 @@ from fastapi import FastAPI, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from backend.db.config import get_db, init_db as db_init
-from backend.db.service import get_ranking_detail, get_ranking_history, save_ranking_session
+from backend.db.service import (
+    get_ranking_detail,
+    get_ranking_history,
+    save_ranking_session,
+    delete_ranking_session,
+)
 from backend.auth.depends import get_current_user, require_role
 from backend.auth.routes import router as auth_router
 from backend.db.models import User
@@ -47,6 +52,8 @@ from backend.parser.resume_parser import normalize_resume_text
 from backend.parser.extraction_quality import estimate_text_quality
 from backend.reporting.pdf_report import build_pdf_report
 from backend.scoring.scorer import score_resume_text
+from backend.db.report_service import save_report, get_user_reports, get_report_by_id, delete_report, report_to_dict
+from backend.db.config import SessionLocal as DbSessionLocal
 
 
 class RankCandidateRequest(BaseModel):
@@ -431,7 +438,7 @@ async def rank_from_files(
     files: list[UploadFile] = File(..., min_length=2, max_length=100),
     strictness: str = Form(default="medium"),
     cross_reference_sync: bool = Form(default=True),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role("manager")),
 ) -> JSONResponse:
     """Upload multiple resume files + JD, extract text, rank candidates.
     
@@ -563,7 +570,7 @@ def _strip_internal_fields(results: list[dict]) -> list[dict]:
 async def rank_candidates(
     payload: RankRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role("manager")),
 ) -> list[dict[str, object]]:
     """Rank multiple candidates against a shared job description.
 
@@ -605,7 +612,7 @@ async def rank_candidates(
 async def list_rankings(
     db: Session = Depends(get_db),
     limit: int = 50,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role("manager")),
 ) -> list[dict]:
     """Return the most recent ranking sessions (summary)."""
     return get_ranking_history(db, limit=limit, user_id=current_user.id)
@@ -615,13 +622,113 @@ async def list_rankings(
 async def get_ranking(
     ranking_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role("manager")),
 ) -> dict:
     """Return a single ranking session with full candidate results."""
     detail = get_ranking_detail(db, ranking_id, user_id=current_user.id)
     if detail is None:
         raise HTTPException(status_code=404, detail="Ranking session not found.")
     return detail
+
+
+@app.delete("/rankings/{ranking_id}")
+async def delete_ranking(
+    ranking_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("manager")),
+) -> dict:
+    """Delete a ranking session owned by the current user.
+
+    Verifies ownership before deletion. Returns 403 if the ranking
+    belongs to another user, 404 if it doesn't exist.
+    """
+    deleted = delete_ranking_session(db, ranking_id, user_id=current_user.id)
+    if not deleted:
+        # Check if the ranking exists at all to distinguish 403 vs 404
+        from backend.db.models import Ranking
+        exists = db.query(Ranking).filter(Ranking.id == ranking_id).first() is not None
+        if exists:
+            raise HTTPException(
+                status_code=403,
+                detail="You do not have permission to delete this ranking session.",
+            )
+        raise HTTPException(status_code=404, detail="Ranking session not found.")
+    logger.info("Deleted ranking id=%d (user_id=%d)", ranking_id, current_user.id)
+    return {"detail": "Ranking session deleted successfully."}
+
+
+# ── Reports endpoints (manager-only) ──────────────────────────────────────────
+
+
+class SaveReportRequest(BaseModel):
+    """Request body for persisting a verification report."""
+    candidate_name: str = Field(..., min_length=1, max_length=500)
+    job_description: str = Field(default="", max_length=100_000)
+    risk_score: int = Field(..., ge=0, le=100)
+    confidence: int = Field(..., ge=0, le=100)
+    compatibility_score: int = Field(..., ge=0, le=100)
+    verdict: str = Field(..., pattern="^(likely_consistent|needs_review|high_risk|unknown)$")
+    strictness: str = Field(default="medium", pattern="^(low|medium|high)$")
+    cross_reference_sync: bool = True
+    analysis_data: dict | None = None
+
+
+@app.post("/reports")
+async def create_report(
+    payload: SaveReportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("manager")),
+) -> dict:
+    """Persist a verification report owned by the current user."""
+    report = save_report(
+        db=db,
+        user_id=current_user.id,
+        candidate_name=payload.candidate_name,
+        job_description=payload.job_description,
+        risk_score=payload.risk_score,
+        confidence=payload.confidence,
+        compatibility_score=payload.compatibility_score,
+        verdict=payload.verdict,
+        strictness=payload.strictness,
+        cross_reference_sync=payload.cross_reference_sync,
+        analysis_data=payload.analysis_data,
+    )
+    logger.info("Saved report id=%d for user_id=%d", report.id, current_user.id)
+    return report_to_dict(report)
+
+
+@app.get("/reports")
+async def list_reports(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("manager")),
+) -> list[dict]:
+    """Return all reports owned by the current user."""
+    reports = get_user_reports(db, user_id=current_user.id)
+    return [report_to_dict(r) for r in reports]
+
+
+@app.delete("/reports/{report_id}")
+async def delete_report_endpoint(
+    report_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("manager")),
+) -> dict:
+    """Delete a report owned by the current user.
+
+    Verifies ownership before deletion. Returns 403 if the report
+    belongs to another user, 404 if it doesn't exist.
+    """
+    report = get_report_by_id(db, report_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Report not found.")
+    if report.user_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to delete this report.",
+        )
+    delete_report(db, report)
+    logger.info("Deleted report id=%d (user_id=%d)", report_id, current_user.id)
+    return {"detail": "Report deleted successfully."}
 
 
 if DIST_ASSETS_DIR.exists():

@@ -10,22 +10,40 @@ import { Help } from "./pages/Help";
 import RankCandidates from "./pages/RankCandidates";
 import RankingHistory from "./pages/RankingHistory";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { Navigate } from "react-router";
+import { useAuth } from "./context/AuthContext";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
 
+function ProtectedManagerRoute({ children }: { children: React.ReactNode }) {
+  const { user, isAuthenticated, loading } = useAuth();
+
+  if (loading) return null;
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user?.role !== "manager") {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function ProtectedRank() {
   return (
-    <ProtectedRoute>
+    <ProtectedManagerRoute>
       <RankCandidates />
-    </ProtectedRoute>
+    </ProtectedManagerRoute>
   );
 }
 
 function ProtectedRankingHistory() {
   return (
-    <ProtectedRoute>
+    <ProtectedManagerRoute>
       <RankingHistory />
-    </ProtectedRoute>
+    </ProtectedManagerRoute>
   );
 }
 

@@ -4,7 +4,7 @@ const getApiBaseUrl = () => {
   // Same-origin API: FastAPI serves both the frontend and API endpoints.
   // In development, Vite dev server proxies to the FastAPI backend.
   if (import.meta.env.DEV) {
-    return 'http://127.0.0.1:8000';
+    return 'http://localhost:8000';
   }
   return '';
 };
@@ -110,6 +110,8 @@ export type ScanResult = {
   confidenceReason?: string;
   // Operational warnings (extraction quality, OCR issues)
   extractionWarnings?: string[];
+  // Backend-assigned ID (if persisted)
+  dbId?: number;
 };
 
 type VerificationInput = {
@@ -124,6 +126,7 @@ type VerificationContextType = {
   history: ScanResult[];
   runVerification: (data: VerificationInput) => Promise<void>;
   setCurrentScan: (scan: ScanResult) => void;
+  deleteReport: (dbId: number) => Promise<void>;
 };
 
 const VerificationContext = createContext<VerificationContextType | undefined>(undefined);
@@ -263,6 +266,46 @@ function normalizeStoredScan(scan: Partial<ScanResult>): ScanResult {
     weakAreas: Array.isArray(scan.weakAreas) ? scan.weakAreas : [],
     strictness: scan.strictness ?? 'medium',
     crossReferenceSync: typeof scan.crossReferenceSync === 'boolean' ? scan.crossReferenceSync : true,
+    dbId: scan.dbId,
+  };
+}
+
+/** Convert a backend report dict (snake_case) to a ScanResult. */
+function reportDictToScanResult(d: Record<string, any>): ScanResult {
+  const analysisData = d.analysis_data || {};
+  const claims: Claim[] = Array.isArray(analysisData.claims) ? analysisData.claims : [];
+  const findings: Finding[] = Array.isArray(analysisData.findings) ? analysisData.findings : [];
+  const evidence: EvidenceItem[] = Array.isArray(analysisData.evidence) ? analysisData.evidence : [];
+  const timeline: TimelineEntry[] = Array.isArray(analysisData.timeline) ? analysisData.timeline : [];
+  const claimViews = claims.length > 0 ? claims.map(mapClaimToView) : [];
+
+  return {
+    id: `DB-${d.id}`,
+    dbId: d.id,
+    candidateName: d.candidate_name || 'Unknown Candidate',
+    jobDescription: d.job_description || '',
+    date: d.created_at
+      ? new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    riskScore: d.risk_score ?? 0,
+    confidence: d.confidence ?? 0,
+    compatibilityScore: d.compatibility_score ?? 0,
+    verdict: d.verdict ?? 'unknown',
+    findings,
+    claims,
+    evidence,
+    timeline,
+    timelineAnalysis: analysisData.timeline_analysis,
+    skillTimelineInsights: analysisData.skill_timeline_insights || [],
+    extractedText: analysisData.extracted_text || '',
+    claimViews,
+    skills: Array.isArray(analysisData.skills) ? analysisData.skills : [],
+    actionVerbs: Array.isArray(analysisData.action_verbs) ? analysisData.action_verbs : [],
+    matchedSkills: Array.isArray(analysisData.matched_skills) ? analysisData.matched_skills : [],
+    missingSkills: Array.isArray(analysisData.missing_skills) ? analysisData.missing_skills : [],
+    weakAreas: Array.isArray(analysisData.weak_areas) ? analysisData.weak_areas : [],
+    strictness: d.strictness || 'medium',
+    crossReferenceSync: typeof d.cross_reference_sync === 'boolean' ? d.cross_reference_sync : true,
   };
 }
 
@@ -346,22 +389,117 @@ async function verifyResumeText(text: string, jobDescription: string) {
   };
 }
 
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('access_token');
+  if (token) {
+    return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+  }
+  return { 'Content-Type': 'application/json' };
+}
+
+async function saveReportToBackend(scan: ScanResult): Promise<number | undefined> {
+  const endpoint = API_BASE_URL ? `${API_BASE_URL}/reports` : '/reports';
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        candidate_name: scan.candidateName,
+        job_description: scan.jobDescription,
+        risk_score: scan.riskScore,
+        confidence: scan.confidence,
+        compatibility_score: scan.compatibilityScore,
+        verdict: scan.verdict,
+        strictness: scan.strictness,
+        cross_reference_sync: scan.crossReferenceSync,
+        analysis_data: {
+          findings: scan.findings,
+          claims: scan.claims,
+          evidence: scan.evidence,
+          timeline: scan.timeline,
+          timeline_analysis: scan.timelineAnalysis,
+          skill_timeline_insights: scan.skillTimelineInsights,
+          skills: scan.skills,
+          action_verbs: scan.actionVerbs,
+          matched_skills: scan.matchedSkills,
+          missing_skills: scan.missingSkills,
+          weak_areas: scan.weakAreas,
+          job_requirements: null,
+          consistency_findings: [],
+          resume_sections: {},
+          years_experience: null,
+          strictness: scan.strictness,
+          cross_reference_sync: scan.crossReferenceSync,
+          extracted_text: scan.extractedText,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn('Failed to persist report to backend:', await response.text());
+      return undefined;
+    }
+
+    const data = await response.json() as { id: number };
+    return data.id;
+  } catch (err) {
+    console.warn('Failed to persist report to backend:', err);
+    return undefined;
+  }
+}
+
+async function fetchReportsFromBackend(): Promise<ScanResult[]> {
+  const endpoint = API_BASE_URL ? `${API_BASE_URL}/reports` : '/reports';
+  try {
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = await response.json() as Record<string, any>[];
+    return data.map(reportDictToScanResult);
+  } catch (err) {
+    console.warn('Failed to fetch reports from backend:', err);
+    return [];
+  }
+}
+
 export function VerificationProvider({ children }: { children: React.ReactNode }) {
   const [currentScan, setCurrentScan] = useState<ScanResult | null>(null);
   const [history, setHistory] = useState<ScanResult[]>([]);
 
+  // Load history from localStorage and backend on mount
   useEffect(() => {
-    const saved = localStorage.getItem('pathai_history');
-    if (!saved) return;
+    const loadHistory = async () => {
+      // First load from localStorage
+      const saved = localStorage.getItem('pathai_history');
+      let localHistory: ScanResult[] = [];
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved) as Partial<ScanResult>[];
+          localHistory = Array.isArray(parsed) ? parsed.map(normalizeStoredScan) : [];
+        } catch (error) {
+          console.error('Failed to load history', error);
+        }
+      }
 
-    try {
-      const parsed = JSON.parse(saved) as Partial<ScanResult>[];
-      setHistory(Array.isArray(parsed) ? parsed.map(normalizeStoredScan) : []);
-    } catch (error) {
-      console.error('Failed to load history', error);
-    }
+      // Then try to fetch from backend
+      const backendReports = await fetchReportsFromBackend();
+
+      // Merge: backend reports come first (they have dbId), local reports without dbId come after
+      const existingIds = new Set(backendReports.map(r => r.id));
+      const localOnly = localHistory.filter(r => !existingIds.has(r.id));
+      setHistory([...backendReports, ...localOnly]);
+    };
+
+    loadHistory();
   }, []);
 
+  // Persist to localStorage whenever history changes (for offline/fallback)
   useEffect(() => {
     localStorage.setItem('pathai_history', JSON.stringify(history));
   }, [history]);
@@ -426,12 +564,53 @@ export function VerificationProvider({ children }: { children: React.ReactNode }
       extractionWarnings: extractionWarnings.length > 0 ? extractionWarnings : undefined,
     };
 
+    // Persist to backend (best-effort)
+    const dbId = await saveReportToBackend(scan);
+    if (dbId) {
+      scan.dbId = dbId;
+      scan.id = `DB-${dbId}`;
+    }
+
     setCurrentScan(scan);
-    setHistory((prev) => [scan, ...prev]);
+
+    // Refresh reports from backend to get canonical list
+    const backendReports = await fetchReportsFromBackend();
+    const saved = localStorage.getItem('pathai_history');
+    let localHistory: ScanResult[] = [];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as Partial<ScanResult>[];
+        localHistory = Array.isArray(parsed) ? parsed.map(normalizeStoredScan) : [];
+      } catch {}
+    }
+    const existingIds = new Set(backendReports.map(r => r.id));
+    const localOnly = localHistory.filter(r => !existingIds.has(r.id));
+    setHistory([...backendReports, ...localOnly]);
+  };
+
+  const deleteReport = async (dbId: number) => {
+    const endpoint = API_BASE_URL ? `${API_BASE_URL}/reports/${dbId}` : `/reports/${dbId}`;
+    const response = await fetch(endpoint, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      if (response.status === 403) {
+        throw new Error('You do not have permission to delete this report.');
+      } else if (response.status === 404) {
+        throw new Error('Report not found.');
+      }
+      throw new Error(errText || 'Failed to delete report.');
+    }
+
+    // Remove from local state
+    setHistory((prev) => prev.filter((r) => r.dbId !== dbId));
   };
 
   return (
-    <VerificationContext.Provider value={{ currentScan, history, runVerification, setCurrentScan }}>
+    <VerificationContext.Provider value={{ currentScan, history, runVerification, setCurrentScan, deleteReport }}>
       {children}
     </VerificationContext.Provider>
   );

@@ -21,7 +21,9 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-const menu = [
+const managerMenuItems = ['/rank', '/ranking', '/ranking-history'];
+
+const allMenuItems = [
   { icon: Upload, label: 'Upload', path: '/' },
   { icon: BarChart, label: 'Summary', path: '/summary' },
   { icon: List, label: 'Skills', path: '/skills' },
@@ -39,6 +41,9 @@ const subMenu = [
 export function DashboardLayout() {
   const location = useLocation();
   const { user, isAuthenticated, logout } = useAuth();
+  const menu = user?.role === 'candidate'
+    ? allMenuItems.filter(item => !managerMenuItems.includes(item.path))
+    : allMenuItems;
 
   return (
     <div className="flex min-h-screen bg-background text-foreground font-sans">

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { API_BASE_URL } from '../context/VerificationContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
-import { Trophy, History, Eye, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trophy, History, Eye, ChevronDown, ChevronUp, Trash2, X } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
 type RankingSummary = {
@@ -41,6 +41,11 @@ export default function RankingHistory() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [detailCache, setDetailCache] = useState<Record<number, RankingDetail>>({});
   const [loadingDetail, setLoadingDetail] = useState<number | null>(null);
+
+  // Delete confirmation state
+  const [deleteTarget, setDeleteTarget] = useState<RankingSummary | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchSessions() {
@@ -133,6 +138,71 @@ export default function RankingHistory() {
       }
     }
   }
+
+  const handleDeleteClick = (e: React.MouseEvent, session: RankingSummary) => {
+    e.stopPropagation();
+    setDeleteTarget(session);
+    setDeleteError(null);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+
+    const token = localStorage.getItem('token') || 
+                  localStorage.getItem('access_token') || 
+                  localStorage.getItem('auth_token') || 
+                  localStorage.getItem('pathai_token');
+    if (!token) {
+      setDeleteError('Authentication token is missing. Please log in first.');
+      setDeleteLoading(false);
+      return;
+    }
+
+    try {
+      const endpoint = API_BASE_URL
+        ? `${API_BASE_URL}/rankings/${deleteTarget.id}`
+        : `/rankings/${deleteTarget.id}`;
+      const response = await fetch(endpoint, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.status === 403) {
+        throw new Error('You do not have permission to delete this ranking session.');
+      }
+      if (response.status === 404) {
+        throw new Error('Ranking session not found. It may have already been deleted.');
+      }
+      if (!response.ok) {
+        throw new Error('Failed to delete ranking session.');
+      }
+
+      // Remove from UI
+      setSessions((prev) => prev.filter((s) => s.id !== deleteTarget.id));
+      setDetailCache((prev) => {
+        const updated = { ...prev };
+        delete updated[deleteTarget.id];
+        return updated;
+      });
+      if (expandedId === deleteTarget.id) {
+        setExpandedId(null);
+      }
+      setDeleteTarget(null);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'An error occurred.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteTarget(null);
+    setDeleteError(null);
+  };
 
   function formatDate(iso: string): string {
     try {
@@ -233,6 +303,19 @@ export default function RankingHistory() {
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
+                        setDeleteTarget(session);
+                        setDeleteError(null);
+                      }}
+                      className="text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                      title="Delete ranking session"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
                         toggleExpand(session.id);
                       }}
                       className="text-muted-foreground"
@@ -305,6 +388,71 @@ export default function RankingHistory() {
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {/* Confirmation Dialog */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background border border-border rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h3 className="text-base font-semibold text-foreground">Delete Ranking Session</h3>
+              <button
+                type="button"
+                onClick={handleDeleteCancel}
+                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                aria-label="Cancel deletion"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Are you sure you want to delete ranking session{' '}
+                <span className="font-semibold text-foreground">#{deleteTarget.id}</span>?
+              </p>
+              {deleteTarget.job_description && (
+                <p className="text-xs text-muted-foreground">
+                  Job: {deleteTarget.job_description.length > 100
+                    ? deleteTarget.job_description.substring(0, 100) + '...'
+                    : deleteTarget.job_description}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                This action cannot be undone. The ranking session and all its candidate data will be permanently removed from the server.
+              </p>
+
+              {deleteError && (
+                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-500">
+                  {deleteError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-border bg-secondary/20">
+              <button
+                type="button"
+                onClick={handleDeleteCancel}
+                disabled={deleteLoading}
+                className="px-4 py-2 text-xs font-semibold rounded-lg border border-border bg-background text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                disabled={deleteLoading}
+                className="px-4 py-2 text-xs font-semibold rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50 inline-flex items-center gap-2"
+              >
+                {deleteLoading ? (
+                  <>Deleting…</>
+                ) : (
+                  <>Delete</>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
