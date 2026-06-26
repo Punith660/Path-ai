@@ -36,3 +36,24 @@ class LoginRequest(BaseModel):
     """Login credentials."""
     username: str = Field(..., min_length=1)
     password: str = Field(..., min_length=1)
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Request a password reset email."""
+    email: str = Field(..., min_length=5, max_length=255)
+
+
+class ResetPasswordRequest(BaseModel):
+    """Submit a new password with a reset token."""
+    token: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=6, max_length=128)
+
+
+class ForgotPasswordResponse(BaseModel):
+    """Response after requesting a password reset."""
+    detail: str
+
+
+class ResetPasswordResponse(BaseModel):
+    """Response after successfully resetting the password."""
+    detail: str

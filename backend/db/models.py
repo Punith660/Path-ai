@@ -8,6 +8,7 @@ Tables:
   - rankings:         ranking sessions (one per /rank or /rank-files call)
   - ranking_candidates: individual candidate results within a ranking session
   - reports:          persisted verification reports owned by users
+  - password_reset_tokens: single-use 15-minute password reset tokens
 """
 
 from __future__ import annotations
@@ -126,3 +127,21 @@ class Report(Base):
 
     def __repr__(self) -> str:
         return f"<Report id={self.id} user_id={self.user_id} candidate={self.candidate_name!r}>"
+
+
+class PasswordResetToken(Base):
+    """Single-use, time-limited password reset token (hashed stored)."""
+
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    hashed_token = Column(String(255), nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    used = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+    user = relationship("User")
+
+    def __repr__(self) -> str:
+        return f"<PasswordResetToken id={self.id} user_id={self.user_id} used={self.used}>"

@@ -85,9 +85,17 @@ export function Login() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider" htmlFor="password">
-                Password
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider" htmlFor="password">
+                  Password
+                </label>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs text-electric-blue hover:underline font-medium"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 id="password"
                 type="password"
