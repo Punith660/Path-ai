@@ -67,14 +67,7 @@ def compute_consistency_findings(
                     "evidence": [e.get("snippet", "") for e in (c.get("evidence") or [])][:2],
                 }
             )
-        elif lvl == "missing":
-            consistency_findings.append(
-                {
-                    "claim": f"{sk} is required by the job description but was not found in resume sections.",
-                    "status": lvl,
-                    "evidence": [],
-                }
-            )
+        # NOTE: missing evidence_level is intentionally skipped (job-fit gap, not fraud)
 
     sentences = split_sentences(text)
     for sentence in sentences:

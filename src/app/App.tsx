@@ -1,6 +1,6 @@
 import { RouterProvider } from 'react-router';
 import { router } from './routes.tsx';
-import { Toaster } from 'sonner';
+import { Toaster } from './components/ui/sonner.tsx';
 import { VerificationProvider } from './context/VerificationContext';
 import { AuthProvider } from './context/AuthContext';
 
@@ -9,7 +9,7 @@ function App() {
     <AuthProvider>
       <VerificationProvider>
         <RouterProvider router={router} />
-        <Toaster theme="dark" position="top-right" richColors />
+        <Toaster position="top-right" richColors />
       </VerificationProvider>
     </AuthProvider>
   );

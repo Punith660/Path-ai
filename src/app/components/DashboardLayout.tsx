@@ -16,6 +16,7 @@ import {
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from 'next-themes';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

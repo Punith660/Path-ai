@@ -311,12 +311,12 @@ class TestAggregateFindings:
         merged = aggregate_findings(findings, consistency, needs_fallback_message=False)
         assert any("ninja" in f["message"] for f in merged)
 
-    def test_missing_consistency_high_severity(self):
+    def test_inflated_consistency_medium_severity(self):
         findings = []
-        consistency = [{"status": "missing", "claim": "Kubernetes missing"}]
+        consistency = [{"status": "inflated", "claim": "Kubernetes inflated"}]
         merged = aggregate_findings(findings, consistency, needs_fallback_message=False)
-        high = [f for f in merged if f["severity"] == "high"]
-        assert len(high) >= 1
+        mid = [f for f in merged if f["severity"] == "medium"]
+        assert len(mid) >= 1
 
     def test_at_most_8_consistency_findings(self):
         consistency = [{"status": "buzzword", "claim": f"buzzword {i}"} for i in range(20)]

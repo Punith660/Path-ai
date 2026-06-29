@@ -208,9 +208,9 @@ def aggregate_findings(
     for item in consistency_findings[:8]:
         if item.get("status") == "buzzword":
             findings.append({"message": str(item["claim"]), "severity": "medium"})
-        elif item.get("status") in ("inflated", "weak", "missing"):
+        elif item.get("status") in ("inflated", "weak"):
             findings.append(
-                {"message": str(item["claim"]), "severity": "high" if item["status"] == "missing" else "medium"}
+                {"message": str(item["claim"]), "severity": "medium"}
             )
 
     return findings

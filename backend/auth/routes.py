@@ -43,8 +43,8 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 # ── Resend configuration ──────────────────────────────────────────────────────
 
 RESEND_API_KEY: str | None = os.getenv("RESEND_API_KEY")
-FROM_EMAIL: str = os.getenv("FROM_EMAIL", "noreply@resend.dev")
-FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
+FROM_EMAIL: str = os.getenv("FROM_EMAIL", "[EMAIL]")
+FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 
 if RESEND_API_KEY:
     resend.api_key = RESEND_API_KEY
