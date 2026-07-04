@@ -11,7 +11,9 @@ import {
   Settings, 
   HelpCircle,
   LogOut,
-  LogIn
+  LogIn,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -42,9 +44,16 @@ const subMenu = [
 export function DashboardLayout() {
   const location = useLocation();
   const { user, isAuthenticated, logout } = useAuth();
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = React.useState(false);
   const menu = user?.role === 'candidate'
     ? allMenuItems.filter(item => !managerMenuItems.includes(item.path))
     : allMenuItems;
+  const isDark = resolvedTheme === 'dark';
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <div className="flex min-h-screen bg-background text-foreground font-sans">
@@ -135,7 +144,22 @@ export function DashboardLayout() {
           <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
             {location.pathname === '/' ? 'New Scan' : location.pathname.split('/').pop()}
           </h2>
-          <div className="text-[10px] text-muted-foreground">Version 1.0.4 • Secure</div>
+          <div className="flex items-center gap-3">
+            <div className="text-[10px] text-muted-foreground">Version 1.0.4 • Secure</div>
+            <button
+              type="button"
+              onClick={() => setTheme(isDark ? 'light' : 'dark')}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-secondary/50 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+              title={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+            >
+              {mounted && isDark ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )}
+            </button>
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto px-8 py-8 max-w-6xl mx-auto w-full">
