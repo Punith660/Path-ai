@@ -62,13 +62,12 @@ def save_ranking_session(
     return ranking
 
 
-def get_ranking_history(db: Session, limit: int = 50, user_id: int | None = None) -> list[dict]:
+def get_ranking_history(db: Session, limit: int = 50, user_id: int = ...) -> list[dict]:
     """Return the most recent ranking sessions (summary only)."""
-    query = db.query(Ranking)
-    if user_id is not None:
-        query = query.filter(Ranking.user_id == user_id)
     rankings = (
-        query.order_by(Ranking.created_at.desc())
+        db.query(Ranking)
+        .filter(Ranking.user_id == user_id)
+        .order_by(Ranking.created_at.desc())
         .limit(limit)
         .all()
     )
@@ -110,12 +109,13 @@ def delete_ranking_session(db: Session, ranking_id: int, user_id: int) -> bool:
     return True
 
 
-def get_ranking_detail(db: Session, ranking_id: int, user_id: int | None = None) -> dict | None:
+def get_ranking_detail(db: Session, ranking_id: int, user_id: int = ...) -> dict | None:
     """Return a single ranking session with full candidate results."""
-    query = db.query(Ranking).filter(Ranking.id == ranking_id)
-    if user_id is not None:
-        query = query.filter(Ranking.user_id == user_id)
-    ranking = query.first()
+    ranking = (
+        db.query(Ranking)
+        .filter(Ranking.id == ranking_id, Ranking.user_id == user_id)
+        .first()
+    )
     if not ranking:
         return None
 

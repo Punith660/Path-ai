@@ -29,7 +29,13 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 # ── JWT ───────────────────────────────────────────────────────────────────────
 
-SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "change-me-in-production")
+_SECRET_KEY: str | None = os.getenv("JWT_SECRET_KEY")
+if _SECRET_KEY is None:
+    raise RuntimeError(
+        "JWT_SECRET_KEY environment variable is not set. "
+        "Authentication cannot start without a secret key."
+    )
+SECRET_KEY: str = _SECRET_KEY
 ALGORITHM: str = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
 
@@ -79,3 +85,73 @@ def verify_reset_token(plain_token: str, hashed_token: str) -> bool:
 def get_reset_token_expiry() -> datetime:
     """Return the UTC datetime when a reset token should expire."""
     return datetime.now(timezone.utc) + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES)
+
+
+# ── Rate limiting helpers ─────────────────────────────────────────────────────
+
+from collections import defaultdict
+import time
+
+LOGIN_ATTEMPTS: dict[str, list[float]] = defaultdict(list)
+LOGIN_ATTEMPTS_IP: dict[str, list[float]] = defaultdict(list)
+ACCOUNT_LOCKOUT: dict[str, float] = {}
+RESET_ATTEMPTS_EMAIL: dict[str, list[float]] = defaultdict(list)
+RESET_ATTEMPTS_IP: dict[str, list[float]] = defaultdict(list)
+
+MAX_LOGIN_ATTEMPTS: int = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
+LOGIN_WINDOW_SECONDS: int = int(os.getenv("LOGIN_WINDOW_SECONDS", "300"))
+ACCOUNT_LOCKOUT_SECONDS: int = int(os.getenv("ACCOUNT_LOCKOUT_SECONDS", "900"))
+MAX_RESET_ATTEMPTS: int = int(os.getenv("MAX_RESET_ATTEMPTS", "3"))
+RESET_WINDOW_SECONDS: int = int(os.getenv("RESET_WINDOW_SECONDS", "3600"))
+
+
+def _prune_attempts(attempts: list[float], window: int) -> None:
+    cutoff = time.time() - window
+    while attempts and attempts[0] < cutoff:
+        attempts.pop(0)
+
+
+def check_login_rate_limit(username: str, ip: str) -> None:
+    now = time.time()
+    if username in ACCOUNT_LOCKOUT:
+        if now < ACCOUNT_LOCKOUT[username]:
+            raise RuntimeError("Account is temporarily locked.")
+        else:
+            del ACCOUNT_LOCKOUT[username]
+    _prune_attempts(LOGIN_ATTEMPTS[username], LOGIN_WINDOW_SECONDS)
+    _prune_attempts(LOGIN_ATTEMPTS_IP[ip], LOGIN_WINDOW_SECONDS)
+    if len(LOGIN_ATTEMPTS[username]) >= MAX_LOGIN_ATTEMPTS:
+        ACCOUNT_LOCKOUT[username] = time.time() + ACCOUNT_LOCKOUT_SECONDS
+        LOGIN_ATTEMPTS[username].clear()
+        raise RuntimeError("Account is temporarily locked.")
+    if len(LOGIN_ATTEMPTS_IP[ip]) >= MAX_LOGIN_ATTEMPTS:
+        raise RuntimeError("Too many login attempts from this IP.")
+
+
+def record_login_attempt(username: str, ip: str, success: bool) -> None:
+    now = time.time()
+    if not success:
+        LOGIN_ATTEMPTS[username].append(now)
+        LOGIN_ATTEMPTS_IP[ip].append(now)
+        _prune_attempts(LOGIN_ATTEMPTS[username], LOGIN_WINDOW_SECONDS)
+        _prune_attempts(LOGIN_ATTEMPTS_IP[ip], LOGIN_WINDOW_SECONDS)
+        if len(LOGIN_ATTEMPTS[username]) >= MAX_LOGIN_ATTEMPTS:
+            ACCOUNT_LOCKOUT[username] = time.time() + ACCOUNT_LOCKOUT_SECONDS
+    else:
+        LOGIN_ATTEMPTS.pop(username, None)
+        ACCOUNT_LOCKOUT.pop(username, None)
+
+
+def check_reset_rate_limit(email: str, ip: str) -> None:
+    _prune_attempts(RESET_ATTEMPTS_EMAIL[email], RESET_WINDOW_SECONDS)
+    _prune_attempts(RESET_ATTEMPTS_IP[ip], RESET_WINDOW_SECONDS)
+    if len(RESET_ATTEMPTS_EMAIL[email]) >= MAX_RESET_ATTEMPTS:
+        raise RuntimeError("Too many password reset requests for this email.")
+    if len(RESET_ATTEMPTS_IP[ip]) >= MAX_RESET_ATTEMPTS:
+        raise RuntimeError("Too many password reset requests from this IP.")
+
+
+def record_reset_attempt(email: str, ip: str) -> None:
+    now = time.time()
+    RESET_ATTEMPTS_EMAIL[email].append(now)
+    RESET_ATTEMPTS_IP[ip].append(now)

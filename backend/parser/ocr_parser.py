@@ -23,6 +23,9 @@ def preprocess_image(image: Image.Image) -> Image.Image:
     return Image.fromarray(thresh)
 
 
+_MAX_PIXELS_PER_PAGE = 10_000_000
+
+
 def extract_text_with_ocr(pdf_bytes: bytes, max_pages: int = 10) -> str:
     """Render PDF pages to images and OCR them when embedded text is unavailable."""
 
@@ -36,8 +39,18 @@ def extract_text_with_ocr(pdf_bytes: bytes, max_pages: int = 10) -> str:
             
             for page_num in range(num_pages):
                 page = document[page_num]
-                # 2x render balances OCR accuracy against CPU/memory cost.
-                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # Higher DPI for better OCR
+                # Scale down if pixel count would exceed limit
+                rect = page.rect
+                w, h = int(rect.width), int(rect.height)
+                base_pixels = w * h
+                if base_pixels > _MAX_PIXELS_PER_PAGE:
+                    # Reduce resolution proportionally
+                    scale = (_MAX_PIXELS_PER_PAGE / base_pixels) ** 0.5
+                    matrix = fitz.Matrix(scale, scale)
+                else:
+                    # 2x render balances OCR accuracy against CPU/memory cost.
+                    matrix = fitz.Matrix(2, 2)
+                pix = page.get_pixmap(matrix=matrix)
                 img_data = pix.tobytes("ppm")
                 image = Image.open(BytesIO(img_data))
                 
@@ -73,7 +86,16 @@ def extract_text_with_ocr_detailed(pdf_bytes: bytes, max_pages: int = 10) -> tup
             
             for page_num in range(num_pages):
                 page = document[page_num]
-                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                # Scale down if pixel count would exceed limit
+                rect = page.rect
+                w, h = int(rect.width), int(rect.height)
+                base_pixels = w * h
+                if base_pixels > _MAX_PIXELS_PER_PAGE:
+                    scale = (_MAX_PIXELS_PER_PAGE / base_pixels) ** 0.5
+                    matrix = fitz.Matrix(scale, scale)
+                else:
+                    matrix = fitz.Matrix(2, 2)
+                pix = page.get_pixmap(matrix=matrix)
                 img_data = pix.tobytes("ppm")
                 image = Image.open(BytesIO(img_data))
                 processed_image = preprocess_image(image)

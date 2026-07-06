@@ -9,7 +9,7 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 import resend
 
@@ -33,6 +33,10 @@ from backend.auth.utils import (
     hash_reset_token,
     verify_reset_token,
     get_reset_token_expiry,
+    check_login_rate_limit,
+    record_login_attempt,
+    check_reset_rate_limit,
+    record_reset_attempt,
 )
 from backend.auth.depends import get_current_user
 
@@ -72,7 +76,7 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserOut:
         email=payload.email,
         username=payload.username,
         hashed_password=hash_password(payload.password),
-        role=payload.role,
+        role="candidate",
     )
     db.add(user)
     db.commit()
@@ -83,22 +87,35 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserOut:
 
 
 @router.post("/login", response_model=Token)
-def login(payload: LoginRequest, db: Session = Depends(get_db)) -> Token:
+def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)) -> Token:
     """Authenticate with username + password, receive a JWT access token."""
+
+    ip = request.client.host if request.client else "unknown"
+    try:
+        check_login_rate_limit(payload.username, ip)
+    except RuntimeError as e:
+        record_login_attempt(payload.username, ip, False)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(e),
+        )
 
     user = db.query(User).filter(User.username == payload.username).first()
     if user is None or not verify_password(payload.password, user.hashed_password):
+        record_login_attempt(payload.username, ip, False)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password.",
         )
 
     if not user.is_active:
+        record_login_attempt(payload.username, ip, False)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User account is deactivated.",
         )
 
+    record_login_attempt(payload.username, ip, True)
     token = create_access_token({"sub": user.id, "role": user.role})
     logger.info("Login: user_id=%d username=%s", user.id, user.username)
     return Token(access_token=token)
@@ -138,8 +155,18 @@ def _send_reset_email(recipient: str, reset_link: str) -> bool:
 
 
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)
-def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)) -> ForgotPasswordResponse:
+def forgot_password(payload: ForgotPasswordRequest, request: Request, db: Session = Depends(get_db)) -> ForgotPasswordResponse:
     """Request a password reset link. Always returns 200 to prevent email enumeration."""
+
+    ip = request.client.host if request.client else "unknown"
+    try:
+        check_reset_rate_limit(payload.email, ip)
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(e),
+        )
+    record_reset_attempt(payload.email, ip)
 
     user = db.query(User).filter(User.email == payload.email).first()
 

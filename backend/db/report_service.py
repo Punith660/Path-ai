@@ -60,15 +60,22 @@ def get_user_reports(db: Session, user_id: int, limit: int = 100, offset: int = 
     )
 
 
-def get_report_by_id(db: Session, report_id: int) -> Report | None:
-    """Return a report by its primary key, regardless of ownership."""
-    return db.query(Report).filter(Report.id == report_id).first()
+def get_report_by_id(db: Session, report_id: int, user_id: int) -> Report | None:
+    """Return a report by its primary key, enforcing ownership."""
+    return db.query(Report).filter(Report.id == report_id, Report.user_id == user_id).first()
 
 
-def delete_report(db: Session, report: Report) -> None:
-    """Delete a report row from the database."""
+def delete_report(db: Session, report_id: int, user_id: int) -> bool:
+    """Delete a report row from the database, verifying ownership.
+    
+    Returns True if deleted, False if not found or not owned.
+    """
+    report = db.query(Report).filter(Report.id == report_id, Report.user_id == user_id).first()
+    if not report:
+        return False
     db.delete(report)
     db.commit()
+    return True
 
 
 def report_to_dict(report: Report) -> dict[str, Any]:

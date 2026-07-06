@@ -132,7 +132,6 @@ MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 PDF_CONTENT_TYPES = {"application/pdf"}
 DOCX_CONTENT_TYPES = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/octet-stream",
 }
 GENERIC_BINARY_CONTENT_TYPES = {"application/octet-stream", ""}
 
@@ -183,16 +182,32 @@ def validate_file_signature(file_kind: str, file_bytes: bytes) -> None:
             raise HTTPException(status_code=400, detail="Uploaded file is not a valid PDF.")
         return
 
-    if file_kind == "docx" and not file_bytes.startswith(b"PK"):
-        raise HTTPException(status_code=400, detail="Uploaded file is not a valid DOCX.")
+    if file_kind == "docx":
+        import zipfile
+        from io import BytesIO
+        try:
+            with zipfile.ZipFile(BytesIO(file_bytes)) as zf:
+                names = set(zf.namelist())
+                if "[Content_Types].xml" not in names or "word/document.xml" not in names:
+                    raise HTTPException(status_code=400, detail="Uploaded file is not a valid DOCX.")
+        except zipfile.BadZipFile:
+            raise HTTPException(status_code=400, detail="Uploaded file is not a valid DOCX.")
 
 
 async def read_uploaded_file(upload: UploadFile) -> bytes:
-    data = await upload.read()
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await upload.read(1_048_576)  # 1 MB chunk
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_FILE_SIZE_BYTES:
+            raise HTTPException(status_code=413, detail="Uploaded file is too large.")
+        chunks.append(chunk)
+    data = b"".join(chunks)
     if not data:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
-    if len(data) > MAX_FILE_SIZE_BYTES:
-        raise HTTPException(status_code=413, detail="Uploaded file is too large.")
     return data
 
 
@@ -770,7 +785,7 @@ async def delete_report_endpoint(
     Verifies ownership before deletion. Returns 403 if the report
     belongs to another user, 404 if it doesn't exist.
     """
-    report = get_report_by_id(db, report_id)
+    report = get_report_by_id(db, report_id, current_user.id)
     if report is None:
         raise HTTPException(status_code=404, detail="Report not found.")
     if report.user_id != current_user.id:
@@ -778,7 +793,7 @@ async def delete_report_endpoint(
             status_code=403,
             detail="You do not have permission to delete this report.",
         )
-    delete_report(db, report)
+    delete_report(db, report_id, current_user.id)
     logger.info("Deleted report id=%d (user_id=%d)", report_id, current_user.id)
     return {"detail": "Report deleted successfully."}
 

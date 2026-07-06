@@ -70,12 +70,12 @@ def run_migrations(dialect: str | None = None) -> list[str]:
                 check_column = "user_id"
                 fallback_stmt = sql
 
-            check_sql = (
-                f"SELECT 1 FROM pragma_table_info('{check_table}') "
-                f"WHERE name = '{check_column}'"
+            check_sql = text(
+                "SELECT 1 FROM pragma_table_info(:table_name) "
+                "WHERE name = :column_name"
             )
             with engine.connect() as conn:
-                result = conn.execute(text(check_sql)).scalar()
+                result = conn.execute(check_sql, {"table_name": check_table, "column_name": check_column}).scalar()
                 if result:
                     logger.info("Migration %s already applied (SQLite)", migration_id)
                     continue
