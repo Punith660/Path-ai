@@ -27,6 +27,14 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
             "ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)"
         ),
     ),
+    (
+        "002_add_ranking_candidate_analysis_data",
+        "Add analysis_data column to ranking_candidates table",
+        (
+            "ALTER TABLE ranking_candidates "
+            "ADD COLUMN IF NOT EXISTS analysis_data TEXT"
+        ),
+    ),
 ]
 
 
@@ -48,10 +56,23 @@ def run_migrations(dialect: str | None = None) -> list[str]:
     for migration_id, description, sql in _MIGRATIONS:
         # SQLite does not support IF NOT EXISTS for ALTER TABLE
         if dialect == "sqlite":
-            # Check if column already exists
+            # Determine which table and column to check based on migration
+            if migration_id == "001_add_ranking_user_id":
+                check_table = "rankings"
+                check_column = "user_id"
+                fallback_stmt = "ALTER TABLE rankings ADD COLUMN user_id INTEGER"
+            elif migration_id == "002_add_ranking_candidate_analysis_data":
+                check_table = "ranking_candidates"
+                check_column = "analysis_data"
+                fallback_stmt = "ALTER TABLE ranking_candidates ADD COLUMN analysis_data TEXT"
+            else:
+                check_table = "rankings"
+                check_column = "user_id"
+                fallback_stmt = sql
+
             check_sql = (
-                "SELECT 1 FROM pragma_table_info('rankings') "
-                "WHERE name = 'user_id'"
+                f"SELECT 1 FROM pragma_table_info('{check_table}') "
+                f"WHERE name = '{check_column}'"
             )
             with engine.connect() as conn:
                 result = conn.execute(text(check_sql)).scalar()
@@ -59,8 +80,7 @@ def run_migrations(dialect: str | None = None) -> list[str]:
                     logger.info("Migration %s already applied (SQLite)", migration_id)
                     continue
 
-            # SQLite ALTER TABLE does not support REFERENCES inline
-            stmt = "ALTER TABLE rankings ADD COLUMN user_id INTEGER"
+            stmt = fallback_stmt
         else:
             stmt = sql
 

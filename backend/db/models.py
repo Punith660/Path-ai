@@ -96,6 +96,8 @@ class RankingCandidate(Base):
     compatibility = Column(Float, nullable=False)
     confidence = Column(Float, nullable=False)
     risk = Column(Float, nullable=False)
+    # Full analysis payload stored as JSON (from analyze_resume pipeline)
+    analysis_data = Column(Text, nullable=True)
 
     ranking = relationship("Ranking", back_populates="candidate_results")
     candidate = relationship("Candidate", back_populates="ranking_entries")

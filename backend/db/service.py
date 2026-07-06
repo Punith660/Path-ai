@@ -6,6 +6,8 @@ Provides functions to save ranking sessions and retrieve ranking history.
 
 from __future__ import annotations
 
+import json
+
 from sqlalchemy.orm import Session
 
 from backend.db.models import Candidate, Job, Ranking, RankingCandidate
@@ -36,6 +38,9 @@ def save_ranking_session(
     for result in results:
         name = str(result.get("candidate_name", "Unknown"))
         text = str(result.get("_resume_text", ""))
+        analysis_data_raw = result.get("_analysis_data")
+        if analysis_data_raw is None:
+            analysis_data_raw = result.get("analysis_data")
 
         candidate = Candidate(name=name, text=text)
         db.add(candidate)
@@ -48,6 +53,7 @@ def save_ranking_session(
             compatibility=float(result.get("compatibility", 0.0)),
             confidence=float(result.get("confidence", 0.0)),
             risk=float(result.get("risk", 0.0)),
+            analysis_data=json.dumps(analysis_data_raw) if analysis_data_raw is not None else None,
         )
         db.add(rc)
 
@@ -115,12 +121,26 @@ def get_ranking_detail(db: Session, ranking_id: int, user_id: int | None = None)
 
     candidates = []
     for rc in ranking.candidate_results:
+        analysis_data = None
+        if rc.analysis_data:
+            if isinstance(rc.analysis_data, str):
+                try:
+                    analysis_data = json.loads(rc.analysis_data)
+                except json.JSONDecodeError:
+                    pass
+            else:
+                analysis_data = rc.analysis_data
+
         candidates.append({
             "candidate_name": rc.candidate.name if rc.candidate else "Unknown",
             "rank_score": rc.rank_score,
             "compatibility": rc.compatibility,
             "confidence": rc.confidence,
             "risk": rc.risk,
+            "candidate_id": rc.candidate_id,
+            "ranking_candidate_id": rc.id,
+            "resume_text": rc.candidate.text if rc.candidate else "",
+            "analysis_data": analysis_data,
         })
 
     return {

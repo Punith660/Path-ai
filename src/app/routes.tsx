@@ -9,6 +9,7 @@ import { Settings } from "./pages/Settings";
 import { Help } from "./pages/Help";
 import RankCandidates from "./pages/RankCandidates";
 import RankingHistory from "./pages/RankingHistory";
+import CandidateDetails from "./pages/CandidateDetails";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Navigate } from "react-router";
 import { useAuth } from "./context/AuthContext";
@@ -45,6 +46,14 @@ function ProtectedRankingHistory() {
   return (
     <ProtectedManagerRoute>
       <RankingHistory />
+    </ProtectedManagerRoute>
+  );
+}
+
+function ProtectedCandidateDetails() {
+  return (
+    <ProtectedManagerRoute>
+      <CandidateDetails />
     </ProtectedManagerRoute>
   );
 }
@@ -109,6 +118,18 @@ export const router = createBrowserRouter([
       {
         path: "ranking-history",
         Component: ProtectedRankingHistory,
+      },
+      {
+        path: "ranking-history/:rankingId/candidate/:candidateId",
+        Component: ProtectedCandidateDetails,
+      },
+      {
+        path: "rank/:rankingId/candidate/:candidateId",
+        Component: ProtectedCandidateDetails,
+      },
+      {
+        path: "rankings/:rankingId/candidates/:candidateId",
+        Component: ProtectedCandidateDetails,
       },
       {
         path: "settings",

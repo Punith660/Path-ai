@@ -497,11 +497,12 @@ async def rank_from_files(
     results = await _execute_rank(rank_payload)
 
     # Persist to database (best-effort)
+    rank_files_id = None
     try:
         from backend.db.config import SessionLocal
         db_local = SessionLocal()
         try:
-            save_ranking_session(
+            ranking = save_ranking_session(
                 db_local,
                 job_description=job_description,
                 strictness=strictness,
@@ -509,7 +510,8 @@ async def rank_from_files(
                 results=results,
                 user_id=current_user.id,
             )
-            logger.info("Ranking session saved to database.")
+            rank_files_id = ranking.id
+            logger.info("Ranking session saved to database (id=%d).", rank_files_id)
         finally:
             db_local.close()
     except Exception as exc:
@@ -517,7 +519,10 @@ async def rank_from_files(
 
     cleaned = _strip_internal_fields(results)
     logger.info("Rank-from-files complete — %d candidates ranked", len(cleaned))
-    return JSONResponse(content=cleaned)
+    return JSONResponse(content={
+        "ranking_id": rank_files_id,
+        "candidates": cleaned,
+    })
 
 
 async def _execute_rank(payload: RankRequest) -> list[dict[str, object]]:
@@ -551,6 +556,7 @@ async def _execute_rank(payload: RankRequest) -> list[dict[str, object]]:
             "confidence": confidence,
             "risk": risk,
             "_resume_text": text,  # internal field for persistence, stripped from response
+            "_analysis_data": analysis,  # full pipeline output for candidate detail view
         }
 
     results = await asyncio.gather(*[evaluate(c) for c in payload.candidates])
@@ -566,12 +572,12 @@ def _strip_internal_fields(results: list[dict]) -> list[dict]:
     ]
 
 
-@app.post("/rank", response_model=list[RankedCandidateResult])
+@app.post("/rank")
 async def rank_candidates(
     payload: RankRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("manager")),
-) -> list[dict[str, object]]:
+) -> dict:
     """Rank multiple candidates against a shared job description.
 
     Each candidate is run through the same deterministic pipeline as /verify.
@@ -579,6 +585,8 @@ async def rank_candidates(
 
     Formula:
       rank_score = compatibility_score * 0.7 + confidence * 0.2 - risk_score * 0.1
+
+    Returns an object with ranking_id (if persisted) and candidates array.
     """
     logger.info(
         "Ranking %d candidates for JD (strictness=%s, cross_reference=%s)",
@@ -588,10 +596,11 @@ async def rank_candidates(
     )
 
     results = await _execute_rank(payload)
+    ranking_id = None
 
     # Persist to database (best-effort, non-blocking)
     try:
-        save_ranking_session(
+        ranking = save_ranking_session(
             db,
             job_description=payload.job_description,
             strictness=payload.strictness,
@@ -599,13 +608,17 @@ async def rank_candidates(
             results=results,
             user_id=current_user.id,
         )
-        logger.info("Ranking session saved to database.")
+        ranking_id = ranking.id
+        logger.info("Ranking session saved to database (id=%d).", ranking_id)
     except Exception as exc:
         logger.warning("Failed to save ranking session: %s", exc)
 
     cleaned = _strip_internal_fields(results)
     logger.info("Ranking complete — %d candidates evaluated", len(results))
-    return cleaned
+    return {
+        "ranking_id": ranking_id,
+        "candidates": cleaned,
+    }
 
 
 @app.get("/rankings")
@@ -629,6 +642,45 @@ async def get_ranking(
     if detail is None:
         raise HTTPException(status_code=404, detail="Ranking session not found.")
     return detail
+
+
+@app.get("/rankings/{ranking_id}/candidates/{ranking_candidate_id}")
+async def get_ranking_candidate_detail(
+    ranking_id: int,
+    ranking_candidate_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("manager")),
+) -> dict:
+    """Return full analysis details for a specific candidate in a ranking session."""
+    from backend.db.models import RankingCandidate as RankingCandidateModel
+
+    detail = get_ranking_detail(db, ranking_id, user_id=current_user.id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Ranking session not found.")
+
+    # Find the specific candidate in the ranking
+    target = None
+    for c in detail.get("candidates", []):
+        if c.get("ranking_candidate_id") == ranking_candidate_id:
+            target = c
+            break
+
+    if target is None:
+        raise HTTPException(status_code=404, detail="Candidate not found in this ranking session.")
+
+    return {
+        "ranking_id": ranking_id,
+        "candidate_name": target["candidate_name"],
+        "rank_score": target["rank_score"],
+        "compatibility": target["compatibility"],
+        "confidence": target["confidence"],
+        "risk": target["risk"],
+        "job_description": detail.get("job_description", ""),
+        "strictness": detail.get("strictness", "medium"),
+        "cross_reference_sync": detail.get("cross_reference_sync", True),
+        "resume_text": target.get("resume_text", ""),
+        "analysis_data": target.get("analysis_data"),
+    }
 
 
 @app.delete("/rankings/{ranking_id}")

@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useNavigate } from 'react-router';
 import {
   Table,
   TableBody,
@@ -12,14 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Button } from '../components/ui/button';
-import { Loader2, Trophy, ArrowUp, ArrowDown, FileUp, X, FileText } from 'lucide-react';
+import { Loader2, Trophy, FileUp, X, FileText, Eye } from 'lucide-react';
 import { API_BASE_URL } from '../context/VerificationContext';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
 
 type CandidateEntry = {
   name: string;
@@ -32,6 +27,25 @@ type RankedCandidate = {
   compatibility: number;
   confidence: number;
   risk: number;
+};
+
+type RankResponse = {
+  ranking_id: number | null;
+  candidates: RankedCandidate[];
+};
+
+type RankingDetailCandidate = {
+  candidate_name: string;
+  rank_score: number;
+  compatibility: number;
+  confidence: number;
+  risk: number;
+  ranking_candidate_id: number;
+};
+
+type RankingDetail = {
+  id: number;
+  candidates: RankingDetailCandidate[];
 };
 
 type UploadedFile = {
@@ -52,7 +66,6 @@ function formatScore(value: number): string {
 }
 
 function deriveNameFromFilename(filename: string): string {
-  // Strip extension and replace separators
   const withoutExt = filename.replace(/\.[^/.]+$/, '');
   const name = withoutExt.replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!name) return filename;
@@ -63,19 +76,20 @@ function deriveNameFromFilename(filename: string): string {
 }
 
 export default function RankCandidates() {
+  const navigate = useNavigate();
   const [jobDescription, setJobDescription] = useState('');
   const [candidates, setCandidates] = useState<CandidateEntry[]>([
     { name: '', text: '' },
   ]);
   const [results, setResults] = useState<RankedCandidate[] | null>(null);
+  const [rankingId, setRankingId] = useState<number | null>(null);
+  const [candidateIds, setCandidateIds] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // File upload state
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Tab: 'manual' (text entry) or 'files' (multi-resume upload)
   const [inputMode, setInputMode] = useState<'manual' | 'files'>('manual');
 
   function addCandidate() {
@@ -104,12 +118,32 @@ export default function RankCandidates() {
     }));
 
     setUploadedFiles((prev) => [...prev, ...newFiles]);
-    // Reset the input so the same files can be re-selected if removed
     e.target.value = '';
   }
 
   function removeUploadedFile(id: string) {
     setUploadedFiles((prev) => prev.filter((f) => f.id !== id));
+  }
+
+  async function fetchRankingCandidateIds(rid: number, token: string) {
+    try {
+      const detailEndpoint = API_BASE_URL
+        ? `${API_BASE_URL}/rankings/${rid}`
+        : `/rankings/${rid}`;
+      const detailResp = await fetch(detailEndpoint, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (detailResp.ok) {
+        const detail = (await detailResp.json()) as RankingDetail;
+        const ids: Record<string, number> = {};
+        for (const c of detail.candidates) {
+          ids[c.candidate_name] = c.ranking_candidate_id;
+        }
+        setCandidateIds(ids);
+      }
+    } catch {
+      // Non-critical — fall back to index-based navigation
+    }
   }
 
   async function handleRankFiles() {
@@ -124,6 +158,7 @@ export default function RankCandidates() {
     setError(null);
     setLoading(true);
     setResults(null);
+    setRankingId(null);
 
     const token = localStorage.getItem('token') || 
                   localStorage.getItem('access_token') || 
@@ -145,9 +180,7 @@ export default function RankCandidates() {
       const endpoint = API_BASE_URL ? `${API_BASE_URL}/rank-files` : '/rank-files';
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formData,
       });
 
@@ -164,8 +197,13 @@ export default function RankCandidates() {
         throw new Error(errText || 'Failed to rank candidates from files.');
       }
 
-      const data = (await response.json()) as RankedCandidate[];
-      setResults(data);
+      const data = (await response.json()) as RankResponse;
+      setResults(data.candidates);
+      setRankingId(data.ranking_id);
+
+      if (data.ranking_id) {
+        await fetchRankingCandidateIds(data.ranking_id, token);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred.');
     } finally {
@@ -186,6 +224,7 @@ export default function RankCandidates() {
     setError(null);
     setLoading(true);
     setResults(null);
+    setRankingId(null);
 
     const token = localStorage.getItem('token') || 
                   localStorage.getItem('access_token') || 
@@ -227,13 +266,29 @@ export default function RankCandidates() {
         throw new Error(errText || 'Failed to rank candidates.');
       }
 
-      const data = (await response.json()) as RankedCandidate[];
-      setResults(data);
+      const data = (await response.json()) as RankResponse;
+      setResults(data.candidates);
+      setRankingId(data.ranking_id);
+
+      if (data.ranking_id) {
+        await fetchRankingCandidateIds(data.ranking_id, token);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred.');
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleRowClick(index: number) {
+    if (!rankingId) return;
+    const candidate = results?.[index];
+    if (!candidate) return;
+
+    // Use actual ranking_candidate_id if available, otherwise fall back to index + 1
+    const candidateId = candidateIds[candidate.candidate_name] || (index + 1);
+    const basePath = window.location.pathname.startsWith('/ranking-history') ? 'ranking-history' : 'rank';
+    navigate(`/${basePath}/${rankingId}/candidate/${candidateId}`);
   }
 
   return (
@@ -245,7 +300,6 @@ export default function RankCandidates() {
         </p>
       </div>
 
-      {/* Input Mode Toggle */}
       <div className="flex gap-2">
         <Button
           variant={inputMode === 'manual' ? 'default' : 'outline'}
@@ -265,7 +319,6 @@ export default function RankCandidates() {
         </Button>
       </div>
 
-      {/* Job Description */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Job Description</CardTitle>
@@ -280,7 +333,6 @@ export default function RankCandidates() {
         </CardContent>
       </Card>
 
-      {/* Manual Text Entry Mode */}
       {inputMode === 'manual' && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
@@ -321,7 +373,6 @@ export default function RankCandidates() {
         </Card>
       )}
 
-      {/* File Upload Mode */}
       {inputMode === 'files' && (
         <Card>
           <CardHeader>
@@ -398,7 +449,6 @@ export default function RankCandidates() {
         )}
       </Button>
 
-      {/* Results Table */}
       {results && results.length > 0 && (
         <Card>
           <CardHeader>
@@ -417,6 +467,7 @@ export default function RankCandidates() {
                   <TableHead className="text-right">Compatibility</TableHead>
                   <TableHead className="text-right">Confidence</TableHead>
                   <TableHead className="text-right">Risk</TableHead>
+                  <TableHead className="w-24 text-center">Details</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -425,7 +476,11 @@ export default function RankCandidates() {
                   const badge = getRankBadge(rank);
                   const BadgeIcon = badge.icon;
                   return (
-                    <TableRow key={candidate.candidate_name}>
+                    <TableRow
+                      key={candidate.candidate_name}
+                      className={rankingId ? 'cursor-pointer hover:bg-secondary/30' : ''}
+                      onClick={() => handleRowClick(index)}
+                    >
                       <TableCell>
                         <Badge variant={badge.variant as "default" | "secondary" | "outline"} className="flex items-center gap-1 w-fit">
                           {BadgeIcon && <BadgeIcon className="h-3 w-3" />}
@@ -439,6 +494,21 @@ export default function RankCandidates() {
                       <TableCell className="text-right">{formatScore(candidate.compatibility)}</TableCell>
                       <TableCell className="text-right">{formatScore(candidate.confidence)}</TableCell>
                       <TableCell className="text-right">{formatScore(candidate.risk)}</TableCell>
+                      <TableCell className="text-center">
+                        {rankingId && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRowClick(index);
+                            }}
+                            className="text-electric-blue"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   );
                 })}

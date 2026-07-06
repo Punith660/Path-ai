@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { API_BASE_URL } from '../context/VerificationContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
-import { Trophy, History, Eye, ChevronDown, ChevronUp, Trash2, X } from 'lucide-react';
+import { Trophy, History, Eye, ChevronDown, ChevronUp, Trash2, X, ExternalLink, ArrowRight } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
 type RankingSummary = {
@@ -21,6 +21,7 @@ type RankedCandidate = {
   compatibility: number;
   confidence: number;
   risk: number;
+  ranking_candidate_id?: number;
 };
 
 type RankingDetail = {
@@ -364,7 +365,14 @@ export default function RankingHistory() {
                           </thead>
                           <tbody className="divide-y divide-border">
                             {detail.candidates.map((c, idx) => (
-                              <tr key={c.candidate_name} className="hover:bg-secondary/30">
+                              <tr
+                                key={c.candidate_name}
+                                className="hover:bg-secondary/30 cursor-pointer"
+                                onClick={() => {
+                                  const candidateId = c.ranking_candidate_id || (idx + 1);
+                                  navigate(`/rankings/${session.id}/candidates/${candidateId}`);
+                                }}
+                              >
                                 <td className="px-3 py-2 font-bold text-xs">{idx + 1}</td>
                                 <td className="px-3 py-2 font-medium">{c.candidate_name}</td>
                                 <td className="px-3 py-2 text-right font-bold">
