@@ -40,6 +40,9 @@ from backend.auth.routes import router as auth_router
 from backend.db.models import User
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.requests import Request
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -89,14 +92,36 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+class _SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Attach default security headers on every response."""
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:;"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
+
+class _HTTPSEnforcementMiddleware(BaseHTTPMiddleware):
+    """Reject non-HTTPS requests in production when behind a TLS-terminating reverse proxy."""
+    async def dispatch(self, request: Request, call_next):
+        if os.getenv("ENVIRONMENT", "").lower() == "production":
+            forwarded_proto = request.headers.get("X-Forwarded-Proto", "")
+            if forwarded_proto.lower() != "https":
+                raise HTTPException(
+                    status_code=400,
+                    detail="HTTPS required. Ensure a TLS-terminating reverse proxy is configured.",
+                )
+        return await call_next(request)
+
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DIST_DIR = PROJECT_ROOT / "dist"
 DIST_ASSETS_DIR = DIST_DIR / "assets"
 DEFAULT_CORS_ORIGINS = [
     "http://localhost:3000",
-    "http://127.0.0.1:3000",
     "http://localhost:5173",
-    "http://127.0.0.1:5173",
 ]
 
 
@@ -121,12 +146,20 @@ def _get_allowed_origins() -> list[str]:
 
 
 app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=[h.strip() for h in os.getenv("ALLOWED_HOSTS", "localhost,[IP_ADDRESS],testserver").split(",") if h.strip()],
+)
+
+app.add_middleware(
     CORSMiddleware,
     allow_origins=_get_allowed_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+
+app.add_middleware(_HTTPSEnforcementMiddleware)
+app.add_middleware(_SecurityHeadersMiddleware)
 
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 PDF_CONTENT_TYPES = {"application/pdf"}
