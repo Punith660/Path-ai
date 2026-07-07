@@ -72,7 +72,7 @@ function getTimelineStart(entry: TimelineEntry): string {
 
 function getTimelineEnd(entry: TimelineEntry): string {
   const value = entry.end_year ?? entry.end ?? entry.to ?? entry.current;
-  if (value === true || value === 'present') return 'Present';
+  if (value === 'present') return 'Present';
   return String(value ?? 'Present');
 }
 
@@ -226,7 +226,7 @@ export default function CandidateDetails() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                  <Trophy className="h-3.5 w-3.5 text-yellow-500" />
+                  <Trophy className="h-3.5 w-3.5 text-amber-600" />
                   Rank Score
                 </CardTitle>
               </CardHeader>
@@ -238,24 +238,30 @@ export default function CandidateDetails() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                  <Star className="h-3.5 w-3.5 text-blue-500" />
+                  <Star className="h-3.5 w-3.5 text-sky-500" />
                   Compatibility
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatScore(data.compatibility)}%</div>
+              <CardContent className="space-y-2">
+                <div className="text-3xl font-bold tracking-tight">{formatScore(data.compatibility)}%</div>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-sky-100" role="progressbar" aria-valuenow={data.compatibility} aria-valuemin={0} aria-valuemax={100} aria-label="Compatibility">
+                  <div className="h-full w-full rounded-full bg-sky-500 transition-all" style={{ width: `${data.compatibility}%` }} />
+                </div>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                  <Shield className="h-3.5 w-3.5 text-green-500" />
+                  <Shield className="h-3.5 w-3.5 text-emerald-500" />
                   Confidence
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatScore(data.confidence)}%</div>
+              <CardContent className="space-y-2">
+                <div className="text-3xl font-bold tracking-tight">{formatScore(data.confidence)}%</div>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-emerald-100" role="progressbar" aria-valuenow={data.confidence} aria-valuemin={0} aria-valuemax={100} aria-label="Confidence">
+                  <div className="h-full w-full rounded-full bg-emerald-500 transition-all" style={{ width: `${data.confidence}%` }} />
+                </div>
               </CardContent>
             </Card>
 
@@ -266,8 +272,11 @@ export default function CandidateDetails() {
                   Risk
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatScore(data.risk)}%</div>
+              <CardContent className="space-y-2">
+                <div className="text-3xl font-bold tracking-tight">{formatScore(data.risk)}%</div>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-red-100" role="progressbar" aria-valuenow={data.risk} aria-valuemin={0} aria-valuemax={100} aria-label="Risk">
+                  <div className="h-full w-full rounded-full bg-red-500 transition-all" style={{ width: `${data.risk}%` }} />
+                </div>
                 {riskBadge && (
                   <Badge variant={riskBadge.variant} className="mt-1">
                     {riskBadge.label}
@@ -282,7 +291,7 @@ export default function CandidateDetails() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Lightbulb className="h-4 w-4 text-yellow-500" />
+                  <Lightbulb className="h-4 w-4 text-amber-600" />
                   Executive Summary
                 </CardTitle>
               </CardHeader>
@@ -385,7 +394,7 @@ export default function CandidateDetails() {
                   )}
                   {analysis.timeline_analysis.gaps && analysis.timeline_analysis.gaps.length > 0 && (
                     <div>
-                      <p className="text-xs font-medium text-amber-500 mb-1">Gaps</p>
+                      <p className="text-xs font-medium text-amber-600 mb-1">Gaps</p>
                       {analysis.timeline_analysis.gaps.map((msg, i) => (
                         <p key={i} className="text-sm text-muted-foreground">• {msg}</p>
                       ))}
@@ -393,7 +402,7 @@ export default function CandidateDetails() {
                   )}
                   {analysis.timeline_analysis.suspicious_inflation && analysis.timeline_analysis.suspicious_inflation.length > 0 && (
                     <div>
-                      <p className="text-xs font-medium text-orange-500 mb-1">Suspicious Inflation</p>
+                      <p className="text-xs font-medium text-orange-600 mb-1">Suspicious Inflation</p>
                       {analysis.timeline_analysis.suspicious_inflation.map((msg, i) => (
                         <p key={i} className="text-sm text-muted-foreground">• {msg}</p>
                       ))}
@@ -412,45 +421,15 @@ export default function CandidateDetails() {
                 Skill Credibility
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               {/* Matched Skills */}
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-2">Matched Skills</p>
-                {matchedSkills.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {matchedSkills.map((skill) => (
-                      <Badge key={skill} variant="default" className="text-xs">
-                        {skill}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No matched skills.</p>
-                )}
-              </div>
-
-              {/* Missing Skills */}
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-2">Missing Skills</p>
-                {missingSkills.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {missingSkills.map((skill) => (
-                      <Badge key={skill} variant="outline" className="text-xs text-muted-foreground">
-                        {skill}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No missing skills.</p>
-                )}
-              </div>
-
-              {matchedSkills.length === 0 && extractedSkills.length > 0 && (
+              {matchedSkills.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Extracted Skills</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {extractedSkills.map((skill) => (
-                      <Badge key={skill} variant="default" className="text-xs">
+                  <p className="text-xs font-medium text-muted-foreground mb-3">Matched Skills</p>
+                  <div className="flex flex-wrap gap-2">
+                    {matchedSkills.map((skill) => (
+                      <Badge key={skill} variant="default" className="text-xs px-2.5 py-1">
+                        <CheckCircle className="h-3 w-3 mr-1 text-green-500" />
                         {skill}
                       </Badge>
                     ))}
@@ -458,12 +437,42 @@ export default function CandidateDetails() {
                 </div>
               )}
 
+              {/* Missing Skills */}
+              {missingSkills.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-3">Missing Skills</p>
+                  <div className="flex flex-wrap gap-2">
+                    {missingSkills.map((skill) => (
+                      <Badge key={skill} variant="outline" className="text-xs px-2.5 py-1 text-muted-foreground">
+                        <AlertTriangle className="h-3 w-3 mr-1 text-amber-600" />
+                        {skill}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Extracted Skills (only when no matched skills) */}
+              {matchedSkills.length === 0 && extractedSkills.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-3">Extracted Skills</p>
+                  <div className="flex flex-wrap gap-2">
+                    {extractedSkills.map((skill) => (
+                      <Badge key={skill} variant="secondary" className="text-xs px-2.5 py-1">
+                        {skill}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Verbs */}
               {actionVerbs.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Action Verbs</p>
-                  <div className="flex flex-wrap gap-1.5">
+                  <p className="text-xs font-medium text-muted-foreground mb-3">Action Verbs</p>
+                  <div className="flex flex-wrap gap-2">
                     {actionVerbs.map((verb) => (
-                      <Badge key={verb} variant="outline" className="text-xs">
+                      <Badge key={verb} variant="secondary" className="text-xs px-2.5 py-1">
                         {verb}
                       </Badge>
                     ))}
@@ -474,16 +483,21 @@ export default function CandidateDetails() {
               {/* Weak Areas */}
               {weakAreas.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Weak Areas</p>
-                  <ul className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground mb-3">Weak Areas</p>
+                  <div className="flex flex-wrap gap-2">
                     {weakAreas.map((area, idx) => (
-                      <li key={idx} className="text-sm text-destructive flex items-start gap-1.5">
-                        <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                      <Badge key={idx} variant="destructive" className="text-xs px-2.5 py-1">
+                        <AlertTriangle className="h-3 w-3 mr-1" />
                         {area}
-                      </li>
+                      </Badge>
                     ))}
-                  </ul>
+                  </div>
                 </div>
+              )}
+
+              {/* Empty state */}
+              {matchedSkills.length === 0 && missingSkills.length === 0 && extractedSkills.length === 0 && (
+                <p className="text-sm text-muted-foreground">No skill data available.</p>
               )}
             </CardContent>
           </Card>
@@ -522,16 +536,71 @@ export default function CandidateDetails() {
               )}
 
               {evidenceEntries.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-border">
+                <div className="mt-4 pt-4 border-t border-border space-y-3">
                   <p className="text-xs font-medium text-muted-foreground mb-2">Evidence</p>
-                  <div className="space-y-1">
-                    {evidenceEntries.map(([key, value]) => (
-                      <p key={key} className="text-sm text-muted-foreground">
-                        <span className="font-medium text-foreground">{key}:</span>{' '}
-                        {typeof value === 'string' ? value : JSON.stringify(value)}
-                      </p>
-                    ))}
-                  </div>
+                  {evidenceEntries.map(([key, item]) => {
+                    const ev = item as Record<string, unknown>;
+                    const rawStatus = (ev.status ?? ev.evidence_level ?? 'unknown') as string;
+                    const statusVariant: 'default' | 'destructive' | 'secondary' | 'outline' =
+                      ['verified', 'demonstrated', 'supported'].includes(rawStatus) ? 'default' :
+                      ['inflated', 'missing'].includes(rawStatus) ? 'destructive' :
+                      ['buzzword', 'weak'].includes(rawStatus) ? 'secondary' :
+                      'outline';
+                    const confidence = ev.confidence as number | undefined;
+                    const rawEvidence = ev.evidence;
+                    const evidenceList = Array.isArray(rawEvidence) ? rawEvidence as unknown[] : [];
+                    const warning = ev.warning as string | undefined;
+
+                    const formatStatus = (s: string) =>
+                      s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+                    return (
+                      <Card key={key}>
+                        <CardContent className="p-4 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-medium">{String(ev.claim ?? ev.skill ?? '')}</p>
+                            <Badge variant={statusVariant} className="shrink-0 text-[10px] capitalize">
+                              {formatStatus(rawStatus)}
+                            </Badge>
+                          </div>
+                          {confidence != null && (
+                            <p className="text-xs text-muted-foreground">
+                              Confidence: {Number.isInteger(confidence) ? confidence : confidence.toFixed(1)}%
+                            </p>
+                          )}
+                          {evidenceList.length > 0 && (
+                            <div className="space-y-1 pt-1">
+                              {evidenceList.map((e: unknown, ei: number) => {
+                                if (typeof e === 'string') {
+                                  return (
+                                    <div key={ei} className="border-l-2 border-muted pl-2 py-0.5">
+                                      <p className="text-xs text-muted-foreground/90 leading-snug">&ldquo;{e}&rdquo;</p>
+                                    </div>
+                                  );
+                                }
+                                const evObj = e as Record<string, unknown>;
+                                const section = String(evObj.section ?? 'resume');
+                                const snippet = String(evObj.snippet ?? '');
+                                return (
+                                  <div key={ei} className="border-l-2 border-muted pl-2 py-0.5">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                      {section.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                                    </p>
+                                    {snippet && (
+                                      <p className="text-xs text-muted-foreground/90 leading-snug">&ldquo;{snippet}&rdquo;</p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {warning && (
+                            <p className="text-xs text-destructive/80">{warning}</p>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
 
