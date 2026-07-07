@@ -76,7 +76,7 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserOut:
         email=payload.email,
         username=payload.username,
         hashed_password=hash_password(payload.password),
-        role="candidate",
+        role=payload.role,
     )
     db.add(user)
     db.commit()
