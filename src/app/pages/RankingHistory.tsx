@@ -227,8 +227,8 @@ export default function RankingHistory() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <History className="h-6 w-6 text-electric-blue" />
-        <div>
+        <History className="h-6 w-6 text-electric-blue shrink-0" />
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight">Ranking History</h1>
           <p className="text-muted-foreground mt-1 text-sm">
             View previous candidate ranking sessions stored in the database.
@@ -276,11 +276,11 @@ export default function RankingHistory() {
             return (
               <Card key={session.id} className="overflow-hidden">
                 <div
-                  className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-secondary/30 transition-colors"
+                  className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 md:px-6 py-4 cursor-pointer hover:bg-secondary/30 transition-colors gap-2"
                   onClick={() => toggleExpand(session.id)}
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center flex-wrap gap-2 mb-1">
                       <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                         #{session.id}
                       </span>
@@ -298,7 +298,7 @@ export default function RankingHistory() {
                       {formatDate(session.created_at)}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-4">
+                  <div className="flex items-center gap-2 shrink-0">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -332,7 +332,7 @@ export default function RankingHistory() {
 
                 {/* Expanded detail */}
                 {isExpanded && (
-                  <div className="border-t border-border px-6 py-4">
+                  <div className="border-t border-border px-4 md:px-6 py-4">
                     {loadingDetail === session.id ? (
                       <div className="text-sm text-muted-foreground py-4 text-center">
                         Loading details...
@@ -352,39 +352,41 @@ export default function RankingHistory() {
                           </div>
                         </div>
 
-                        <table className="w-full text-left text-sm">
-                          <thead className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground bg-secondary/40">
-                            <tr>
-                              <th className="px-3 py-2 w-10">#</th>
-                              <th className="px-3 py-2">Candidate</th>
-                              <th className="px-3 py-2 text-right">Score</th>
-                              <th className="px-3 py-2 text-right">Compat.</th>
-                              <th className="px-3 py-2 text-right">Conf.</th>
-                              <th className="px-3 py-2 text-right">Risk</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-border">
-                            {detail.candidates.map((c, idx) => (
-                              <tr
-                                key={c.candidate_name}
-                                className="hover:bg-secondary/30 cursor-pointer"
-                                onClick={() => {
-                                  const candidateId = c.ranking_candidate_id || (idx + 1);
-                                  navigate(`/rankings/${session.id}/candidates/${candidateId}`);
-                                }}
-                              >
-                                <td className="px-3 py-2 font-bold text-xs">{idx + 1}</td>
-                                <td className="px-3 py-2 font-medium">{c.candidate_name}</td>
-                                <td className="px-3 py-2 text-right font-bold">
-                                  {formatScore(c.rank_score)}
-                                </td>
-                                <td className="px-3 py-2 text-right">{formatScore(c.compatibility)}</td>
-                                <td className="px-3 py-2 text-right">{formatScore(c.confidence)}</td>
-                                <td className="px-3 py-2 text-right">{formatScore(c.risk)}</td>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-sm min-w-[500px]">
+                            <thead className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground bg-secondary/40">
+                              <tr>
+                                <th className="px-3 py-2 w-10">#</th>
+                                <th className="px-3 py-2">Candidate</th>
+                                <th className="px-3 py-2 text-right">Score</th>
+                                <th className="px-3 py-2 text-right">Compat.</th>
+                                <th className="px-3 py-2 text-right">Conf.</th>
+                                <th className="px-3 py-2 text-right">Risk</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                              {detail.candidates.map((c, idx) => (
+                                <tr
+                                  key={c.candidate_name}
+                                  className="hover:bg-secondary/30 cursor-pointer"
+                                  onClick={() => {
+                                    const candidateId = c.ranking_candidate_id || (idx + 1);
+                                    navigate(`/rankings/${session.id}/candidates/${candidateId}`);
+                                  }}
+                                >
+                                  <td className="px-3 py-2 font-bold text-xs whitespace-nowrap">{idx + 1}</td>
+                                  <td className="px-3 py-2 font-medium whitespace-nowrap">{c.candidate_name}</td>
+                                  <td className="px-3 py-2 text-right font-bold whitespace-nowrap">
+                                    {formatScore(c.rank_score)}
+                                  </td>
+                                  <td className="px-3 py-2 text-right whitespace-nowrap">{formatScore(c.compatibility)}</td>
+                                  <td className="px-3 py-2 text-right whitespace-nowrap">{formatScore(c.confidence)}</td>
+                                  <td className="px-3 py-2 text-right whitespace-nowrap">{formatScore(c.risk)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     ) : (
                       <div className="text-sm text-muted-foreground py-2 text-center">

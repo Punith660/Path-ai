@@ -77,7 +77,7 @@ export function Evidence() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {currentScan.evidence.length > 0 ? (
           currentScan.evidence.map((item, index) => {
             const rows = item.evidence ? (Array.isArray(item.evidence) ? item.evidence : []) : [];
@@ -143,7 +143,7 @@ export function Evidence() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <section className="glass-card p-5 border border-border rounded-xl">
           <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">Risk Findings</h3>
           <div className="space-y-3">

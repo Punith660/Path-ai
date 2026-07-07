@@ -99,12 +99,12 @@ export function Summary() {
       animate={reduceMotion ? {} : { opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
     >
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">{currentScan.candidateName}</h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold text-foreground break-words">{currentScan.candidateName}</h1>
           <p className="text-sm text-muted-foreground">JD match scan - {currentScan.id}</p>
         </div>
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex flex-col items-start sm:items-end gap-2 w-full sm:w-auto">
           <div className="text-right">
             <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Confidence Score</p>
             <p className={`text-3xl font-black ${currentScan.confidence > 70 ? 'text-electric-blue' : 'text-amber-400'}`}>

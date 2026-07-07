@@ -222,7 +222,7 @@ export default function CandidateDetails() {
       {!loading && !error && data && (
         <>
           {/* Score Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
@@ -368,7 +368,7 @@ export default function CandidateDetails() {
               {timeline.length > 0 ? (
                 <div className="space-y-2">
                   {timeline.map((entry, idx) => (
-                    <div key={idx} className="text-sm flex gap-2">
+                    <div key={idx} className="text-sm flex flex-col sm:flex-row gap-1 sm:gap-2">
                       <span className="font-medium shrink-0">
                         {entry.start_year} – {entry.end_year === 'present' ? 'Present' : entry.end_year}
                       </span>
@@ -557,7 +557,7 @@ export default function CandidateDetails() {
                     return (
                       <Card key={key}>
                         <CardContent className="p-4 space-y-2">
-                          <div className="flex items-start justify-between gap-2">
+                  <div className="flex flex-col sm:flex-row items-start justify-between gap-2">
                             <p className="text-sm font-medium">{String(ev.claim ?? ev.skill ?? '')}</p>
                             <Badge variant={statusVariant} className="shrink-0 text-[10px] capitalize">
                               {formatStatus(rawStatus)}

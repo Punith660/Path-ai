@@ -81,17 +81,17 @@ export function Reports() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center gap-3">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <h1 className="text-2xl font-semibold text-foreground">Reports</h1>
 
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
           <input
             type="text"
             placeholder="Search candidates…"
             value={query}
             onChange={(e) => onChangeQuery(e.target.value)}
-            className="bg-secondary/60 border border-border rounded-lg px-8 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-electric-blue/40"
+            className="bg-secondary/60 border border-border rounded-lg pl-8 pr-16 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-electric-blue/40 w-full"
             aria-label="Search report history"
           />
           {query.trim().length > 0 && (
@@ -112,8 +112,8 @@ export function Reports() {
           No history available. Run a scan to see it here.
         </div>
       ) : (
-        <div className="glass-card border border-border rounded-xl overflow-hidden">
-          <table className="w-full text-left text-sm">
+        <div className="glass-card border border-border rounded-xl overflow-x-auto">
+          <table className="w-full text-left text-sm min-w-[600px]">
             <thead className="bg-secondary/40 text-[10px] uppercase font-bold tracking-widest text-muted-foreground">
               <tr>
                 <th className="px-6 py-4">Candidate</th>

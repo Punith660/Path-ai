@@ -35,7 +35,7 @@ export function Settings() {
         <section className="glass-card rounded-xl border border-border p-5 space-y-4">
           <h2 className="text-xs uppercase font-bold tracking-widest text-muted-foreground">Scanning</h2>
           <div className="space-y-5">
-            <div className="flex justify-between items-center gap-4 pb-4 border-b border-border">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-border">
               <div>
                 <span className="text-sm text-foreground">Strictness Level</span>
                 <p className="text-xs text-muted-foreground mt-1">Controls JD matching tolerance and evidence penalties.</p>
@@ -50,7 +50,7 @@ export function Settings() {
                 <option value="high">High</option>
               </select>
             </div>
-            <div className="flex justify-between items-center gap-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
                 <span className="text-sm text-foreground">Cross-Reference Sync</span>
                 <p className="text-xs text-muted-foreground mt-1">Checks whether skills, projects, certifications, and senior claims support each other.</p>

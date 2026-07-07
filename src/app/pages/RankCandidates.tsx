@@ -300,13 +300,13 @@ export default function RankCandidates() {
         </p>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
           variant={inputMode === 'manual' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setInputMode('manual')}
         >
-          <FileText className="h-4 w-4 mr-1" />
+          <Trophy className="h-4 w-4 mr-1" />
           Text Entry
         </Button>
         <Button
@@ -343,7 +343,7 @@ export default function RankCandidates() {
           </CardHeader>
           <CardContent className="space-y-4">
             {candidates.map((candidate, index) => (
-              <div key={index} className="flex gap-3 items-start">
+            <div key={index} className="flex flex-col sm:flex-row gap-3 items-start">
                 <div className="flex-1 space-y-2">
                   <Input
                     placeholder={`Candidate ${index + 1} name`}
@@ -458,6 +458,7 @@ export default function RankCandidates() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -514,6 +515,7 @@ export default function RankCandidates() {
                 })}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}
