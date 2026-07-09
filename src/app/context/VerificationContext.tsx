@@ -127,6 +127,7 @@ type VerificationContextType = {
   runVerification: (data: VerificationInput) => Promise<void>;
   setCurrentScan: (scan: ScanResult) => void;
   deleteReport: (dbId: number) => Promise<void>;
+  deleteLocalReport: (id: string) => void;
 };
 
 const VerificationContext = createContext<VerificationContextType | undefined>(undefined);
@@ -609,8 +610,14 @@ export function VerificationProvider({ children }: { children: React.ReactNode }
     setHistory((prev) => prev.filter((r) => r.dbId !== dbId));
   };
 
+  // Removes a report that was never persisted to the backend (no dbId),
+  // so it only ever lived in local history/localStorage.
+  const deleteLocalReport = (id: string) => {
+    setHistory((prev) => prev.filter((r) => r.id !== id));
+  };
+
   return (
-    <VerificationContext.Provider value={{ currentScan, history, runVerification, setCurrentScan, deleteReport }}>
+    <VerificationContext.Provider value={{ currentScan, history, runVerification, setCurrentScan, deleteReport, deleteLocalReport }}>
       {children}
     </VerificationContext.Provider>
   );

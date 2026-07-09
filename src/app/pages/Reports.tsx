@@ -4,7 +4,7 @@ import { Search, Trash2, X } from "lucide-react";
 import { useVerification, ScanResult } from "../context/VerificationContext";
 
 export function Reports() {
-  const { history, setCurrentScan, deleteReport } = useVerification();
+  const { history, setCurrentScan, deleteReport, deleteLocalReport } = useVerification();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
 
@@ -55,13 +55,18 @@ export function Reports() {
 
   const handleDeleteClick = (e: React.MouseEvent, report: ScanResult) => {
     e.stopPropagation(); // Prevent row click navigation
-    if (!report.dbId) return; // Can't delete reports without a backend ID
     setDeleteTarget(report);
     setDeleteError(null);
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deleteTarget?.dbId) return;
+    if (!deleteTarget) return;
+    if (!deleteTarget.dbId) {
+      // Local-only report: never made it to the backend, so just drop it here.
+      deleteLocalReport(deleteTarget.id);
+      setDeleteTarget(null);
+      return;
+    }
     setDeleteLoading(true);
     setDeleteError(null);
     try {
@@ -151,17 +156,15 @@ export function Reports() {
                     {r.confidence}%
                   </td>
                   <td className="px-6 py-4 text-right">
-                    {r.dbId && (
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteClick(e, r)}
-                        className="inline-flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
-                        title="Delete report"
-                        aria-label={`Delete report for ${r.candidateName}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteClick(e, r)}
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
+                      title="Delete report"
+                      aria-label={`Delete report for ${r.candidateName}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -218,7 +221,8 @@ export function Reports() {
                 <span className="font-semibold text-foreground">{deleteTarget.candidateName}</span>?
               </p>
               <p className="text-xs text-muted-foreground">
-                This action cannot be undone. The report will be permanently removed from the server.
+                This action cannot be undone. The report will be permanently removed{" "}
+                {deleteTarget.dbId ? "from the server." : "from this device (it was never saved to the server)."}
               </p>
 
               {deleteError && (

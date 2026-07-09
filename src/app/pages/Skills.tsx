@@ -42,7 +42,7 @@ export function Skills() {
     );
   }
 
-  const skills = currentScan.claimViews as ClaimView[];
+  const skills = (currentScan.claimViews as ClaimView[]).filter((claim) => claim.evidenceLevel !== "missing");
   const normalizedQ = useMemo(() => query.trim().toLowerCase(), [query]);
 
   const filteredSkills = useMemo(() => {

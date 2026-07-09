@@ -46,13 +46,13 @@ BUZZWORDS = [
 ]
 
 SKILL_ALIASES: dict[str, list[str]] = {
-    "JavaScript": ["javascript", "js", "ecmascript"],
+    "JavaScript": ["javascript", "ecmascript"],
     "TypeScript": ["typescript", "ts"],
     "Python": ["python", "py"],
     "Java": ["java"],
     "C++": ["c++", "cpp"],
     "C#": ["c#", "c sharp"],
-    "Go": ["golang", "go"],
+    "Go": ["golang"],
     "Rust": ["rust"],
     "SQL": ["sql", "postgresql", "postgres", "mysql", "sqlite"],
     "React": ["react", "react.js", "reactjs"],
@@ -88,7 +88,7 @@ SKILL_ALIASES: dict[str, list[str]] = {
     "Wireshark": ["wireshark"],
     "Metasploit": ["metasploit"],
     "SIEM": ["siem", "splunk", "sentinel"],
-    "REST APIs": ["rest api", "rest apis", "restful api", "rest"],
+    "REST APIs": ["rest api", "rest apis", "restful api"],
     "GraphQL": ["graphql"],
     "CI/CD": ["ci/cd", "cicd", "continuous integration"],
     "Agile": ["agile", "scrum"],

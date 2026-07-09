@@ -150,7 +150,7 @@ export function Summary() {
           {/* Risk breakdown */}
           {currentScan.riskBreakdown && (
             <div className="mt-3 p-3 rounded-lg bg-amber-950/10 border border-amber-900/20">
-              <p className="text-xs text-amber-200/80 leading-relaxed">{currentScan.riskBreakdown}</p>
+              <p className="text-xs text-amber-600/80 dark:text-amber-200/80 leading-relaxed">{currentScan.riskBreakdown}</p>
             </div>
           )}
 
@@ -200,7 +200,7 @@ export function Summary() {
         </div>
         <div className="glass-card rounded-xl border border-border p-4">
           <h2 className="text-xs uppercase font-bold tracking-widest text-muted-foreground mb-3">Missing Skills</h2>
-          <p className="text-sm text-amber-300">{currentScan.missingSkills.length ? currentScan.missingSkills.join(', ') : 'No missing JD skills detected.'}</p>
+          <p className="text-sm text-amber-600 dark:text-amber-300">{currentScan.missingSkills.length ? currentScan.missingSkills.join(', ') : 'No missing JD skills detected.'}</p>
         </div>
         <div className="glass-card rounded-xl border border-border p-4">
           <h2 className="text-xs uppercase font-bold tracking-widest text-muted-foreground mb-3">Action Verbs</h2>
@@ -231,11 +231,11 @@ export function Summary() {
         <div className="glass-card rounded-xl border border-amber-900/20 p-5">
           <div className="flex items-center gap-2 mb-2">
             <AlertCircle className="w-4 h-4 text-amber-400" />
-            <h2 className="text-xs uppercase font-bold tracking-widest text-amber-300">Extraction Notice</h2>
+            <h2 className="text-xs uppercase font-bold tracking-widest text-amber-600 dark:text-amber-300">Extraction Notice</h2>
           </div>
           <ul className="space-y-1">
             {currentScan.extractionWarnings.map((w, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-amber-200/90">
+              <li key={i} className="flex items-start gap-2 text-sm text-amber-600/90 dark:text-amber-200/90">
                 <span className="text-amber-400 mt-0.5">•</span>
                 <span>{w}</span>
               </li>
@@ -273,8 +273,8 @@ export function Summary() {
               <div className="flex justify-between items-start gap-4">
                 <div>
                   <p className={`text-sm font-medium ${
-                    finding.severity === 'high' ? 'text-rose-200' :
-                    finding.severity === 'medium' ? 'text-amber-200' : 'text-foreground'
+                    finding.severity === 'high' ? 'text-rose-600 dark:text-rose-300' :
+                    finding.severity === 'medium' ? 'text-amber-600 dark:text-amber-300' : 'text-foreground'
                   }`}>{finding.message}</p>
                   <p className="text-[10px] text-muted-foreground mt-1 uppercase tracking-widest">Verification Finding</p>
                 </div>

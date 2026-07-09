@@ -145,6 +145,19 @@ class TestVerifyResponseSchema:
         result = analyze_resume(STRONG_RESUME, "", "medium", True)
         assert result["cross_reference_sync"] is True
 
+    def test_skill_extraction_does_not_infer_false_language_or_api_skills(self):
+        text = """Experience
+Backend Engineer | ProductCo | 2021-2024
+• Built services with Node.js and Express.
+• Coordinated the rest of the release workflow with platform teams.
+
+Skills
+Node.js, Express, TypeScript
+"""
+        result = analyze_resume(text, "", "medium", True)
+        assert "JavaScript" not in result["skills"]
+        assert "REST APIs" not in result["skills"]
+
 
 # ── Score stability ────────────────────────────────────────────────────────
 

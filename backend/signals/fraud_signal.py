@@ -94,7 +94,7 @@ def compute_risk_score(
     risk_score += len([c for c in truly_inflated if c.get("type") == "skill"]) * st["inflated_penalty"]
     # Cross-reference findings — exclude "missing" findings (those are job-fit gaps, not fraud)
     if cross_reference_sync:
-        relevant = [f for f in consistency_findings if f.get("status") != "missing"]
+        relevant = [f for f in consistency_findings if f.get("status") in {"inflated", "buzzword"}]
         risk_score += min(40, len(relevant) * (8 if strictness == "high" else 5))
     # No action verbs = passive resume (weak signal)
     if not action_verbs_list:

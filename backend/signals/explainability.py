@@ -82,7 +82,7 @@ def generate_risk_summary(risk_score: int) -> str:
         return "Moderate risk — some claims lack supporting evidence or JD alignment is incomplete."
     if risk_score >= 20:
         return "Low risk — most claims are supported; minor gaps remain."
-    return "Very low risk — claims are well-supported and JD-aligned."
+    return "Very low risk — no significant credibility concerns detected."
 
 
 def readable_missing_skill_reason(skill: str) -> str:

@@ -1,3 +1,4 @@
+
 """Timeline parsing for employment continuity, overlaps, skill density, and title inflation."""
 
 from __future__ import annotations
@@ -91,8 +92,9 @@ def analyze_employment_spans(entries: list[dict[str, Any]]) -> dict[str, Any]:
                 # Degree of overlap: stronger signal if >1 year overlap
                 overlap_years = min(ey, ey2) - max(sy, sy2)
                 overlap_severity = ", significant" if overlap_years > 1 else ""
+                suffix = "…" if len(ev) > 150 else ""
                 overlaps.append(
-                    f"Overlapping ranges {sy}-{ey} vs {sy2}-{ey2}{overlap_severity}: {ev[:80]}…"
+                    f"Overlapping ranges {sy}-{ey} vs {sy2}-{ey2}{overlap_severity}: {ev[:150]}{suffix}"
                 )
 
     for i in range(len(normalized) - 1):
@@ -100,14 +102,18 @@ def analyze_employment_spans(entries: list[dict[str, Any]]) -> dict[str, Any]:
         sy2, _, ev2 = normalized[i + 1]
         gap = sy2 - ey - 1
         if gap > 1:
-            gaps.append(f"Gap of {gap} years between {ey} and {sy2}: {ev[:60]}… | {ev2[:60]}…")
+            suffix1 = "…" if len(ev) > 60 else ""
+            suffix2 = "…" if len(ev2) > 60 else ""
+            gaps.append(f"Gap of {gap} years between {ey} and {sy2}: {ev[:60]}{suffix1} | {ev2[:60]}{suffix2}")
         elif gap == 1:
-            gaps.append(f"Small gap ({gap} year) between {ey} and {sy2}: {ev[:60]}…")
+            suffix = "…" if len(ev) > 60 else ""
+            gaps.append(f"Small gap ({gap} year) between {ey} and {sy2}: {ev[:60]}{suffix}")
 
     for sy, ey, ev in normalized:
         span = ey - sy
         if span > 25:
-            suspicious_inflation.append(f"Unusually long single span ({span} years): {ev[:90]}…")
+            suffix = "…" if len(ev) > 90 else ""
+            suspicious_inflation.append(f"Unusually long single span ({span} years): {ev[:90]}{suffix}")
         # Check for inflation signals per entry
         title_flag = _detect_title_inflation(ev)
         if title_flag:
