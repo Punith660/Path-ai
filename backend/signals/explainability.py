@@ -158,8 +158,6 @@ def positive_evidence_summary(claims: list[dict[str, Any]], max_items: int = 5) 
                 notes.append(f"{skill} claims are strongly supported by {', '.join(sorted(sections))} evidence.")
             else:
                 notes.append(f"{skill} claims are supported by resume evidence.")
-        elif level == "missing":
-            notes.append(f"{skill} appears in skills but lacks implementation evidence.")
         elif level == "weak" and weak_found < 2:
             notes.append(f"{skill} has weak supporting evidence — consider manual review.")
             weak_found += 1
