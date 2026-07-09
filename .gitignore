@@ -8,5 +8,6 @@ __pycache__/
 *.log
 *.out
 *.err
-
+*.py[cod]
+dist/
 
