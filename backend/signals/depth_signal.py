@@ -28,7 +28,7 @@ def compute_compatibility(
     """Compute compatibility score favoring JD coverage but rewarding broad skill evidence."""
     resume_skill_count = max(1, len(resume_skills))
     match_ratio = len(matched_skills) / max(1, len(required_skills)) if required_skills else min(1.0, len(resume_skills) / 8)
-    coverage_bonus = min(18, resume_skill_count * 2)
+    coverage_bonus = min(18, len(set(matched_skills)) * 2)
     return round(max(0, min(100, (match_ratio * 76) + coverage_bonus)))
 
 

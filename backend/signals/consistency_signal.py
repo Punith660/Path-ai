@@ -45,29 +45,30 @@ def compute_consistency_findings(
         return consistency_findings
 
     for c in claims:
-        if c.get("type") != "skill":
-            continue
         lvl = c.get("evidence_level")
-        sk = str(c.get("skill", ""))
+
+        if c.get("type") != "skill" and lvl != "inflated":
+            continue
+
+        sk = str(c.get("skill") or c.get("claim", ""))
+
+        if c.get("type") == "skill":
+            msg = f"{sk} appears in skills but lacks implementation evidence."
+        else:
+            msg = f"{sk} lacks sufficient supporting evidence."
+
         if lvl in ("demonstrated", "supported", None):
             continue
+
         if lvl == "inflated":
             consistency_findings.append(
                 {
-                    "claim": f"{sk} appears in skills but lacks implementation evidence.",
+                    "claim": msg,
                     "status": lvl,
                     "evidence": [e.get("snippet", "") for e in (c.get("evidence") or [])][:2],
                 }
             )
-        elif lvl == "weak":
-            consistency_findings.append(
-                {
-                    "claim": f"{sk} is only loosely described; strengthen with outcomes or system context.",
-                    "status": lvl,
-                    "evidence": [e.get("snippet", "") for e in (c.get("evidence") or [])][:2],
-                }
-            )
-        # NOTE: missing evidence_level is intentionally skipped (job-fit gap, not fraud)
+            # NOTE: missing evidence_level is intentionally skipped (job-fit gap, not fraud)
 
     sentences = split_sentences(text)
     for sentence in sentences:

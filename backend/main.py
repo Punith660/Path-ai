@@ -595,7 +595,18 @@ async def _execute_rank(payload: RankRequest) -> list[dict[str, object]]:
         confidence = float(analysis["confidence"])
         risk = float(analysis["risk_score"])
 
-        rank_score = round(compatibility * 0.7 + confidence * 0.2 - risk * 0.1, 2)
+        rank_score = round(
+            max(
+                 0,
+                min(
+                    100,
+                    compatibility * 0.7
+                    + confidence * 0.2
+                    - risk * 0.1,
+                ),
+            ),
+            2,
+        )
 
         return {
             "candidate_name": candidate.name,

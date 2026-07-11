@@ -89,12 +89,15 @@ def compute_risk_score(
     st = STRICTNESS[strictness]
     # Risk starts at zero — driven by suspicious signals, not inverse of compatibility
     risk_score = 0
-    # Only truly inflated skill claims erode credibility (skip missing/weak)
+    # Only truly inflated claims erode credibility (skip missing/weak)
     truly_inflated = _truly_inflated(inflated_claims)
-    risk_score += len([c for c in truly_inflated if c.get("type") == "skill"]) * st["inflated_penalty"]
+    risk_score += min(
+        60,
+        int(len(truly_inflated) ** 0.5 * st["inflated_penalty"]),
+    )
     # Cross-reference findings — exclude "missing" findings (those are job-fit gaps, not fraud)
     if cross_reference_sync:
-        relevant = [f for f in consistency_findings if f.get("status") in {"inflated", "buzzword"}]
+        relevant = [f for f in consistency_findings if f.get("status") == "buzzword"]
         risk_score += min(40, len(relevant) * (8 if strictness == "high" else 5))
     # No action verbs = passive resume (weak signal)
     if not action_verbs_list:
@@ -123,7 +126,7 @@ def compute_confidence(
             min(
                 100,
                 (compatibility * 0.75)
-                + (len(verified_claims) * 1.8)
+                + min(20, len(verified_claims) * 1.8)
                 + (len(action_verbs_list) * 0.5)
                 - (len(truly_inflated) * 3.5),
             ),
