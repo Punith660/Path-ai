@@ -1,44 +1,57 @@
 # PathAI Verify
 
-AI-powered resume verification and fraud-detection platform with OCR-enhanced document analysis.
+Deterministic resume verification and candidate ranking platform with PDF/DOCX parsing, OCR fallback, JWT authentication, database-backed report history, and explainable scoring.
 
 ![Frontend](https://img.shields.io/badge/frontend-React%20%2B%20Vite-646CFF)
 ![Backend](https://img.shields.io/badge/backend-FastAPI-009688)
+![Database](https://img.shields.io/badge/database-SQLAlchemy-blue)
 ![OCR](https://img.shields.io/badge/OCR-Tesseract%20%2B%20OpenCV-blue)
-![Deployment](https://img.shields.io/badge/deploy-Vercel%20%2B%20Docker-black)
+![Deployment](https://img.shields.io/badge/deploy-Docker-black)
 
 ## Overview
 
-PathAI Verify helps recruiters, hiring teams, and technical screeners evaluate whether a resume is internally consistent and aligned with a job description. Resume inflation is hard to catch manually: skill lists may not be supported by project or experience bullets, seniority claims can be vague, and scanned resumes often fail standard text extraction.
+PathAI Verify helps candidates and hiring teams evaluate whether resume claims are internally consistent and aligned with a job description. The app parses resumes, extracts skills and evidence, checks job-description coverage, flags weak or unsupported claims, analyzes employment timelines, and presents the results in an authenticated dashboard.
 
-The platform combines document parsing, OCR fallback, structured resume section analysis, job-description matching, and explainable scoring. It extracts candidate claims, maps evidence snippets back to resume sections, flags weak or missing support, and presents results in a recruiter-friendly dashboard.
+The implementation is deterministic and heuristic-based. It does not call an external LLM API.
 
-PathAI Verify currently focuses on:
+## Implemented Features
 
-- PDF and DOCX resume ingestion
-- OCR fallback for scanned PDFs
-- Resume section parsing and normalization
-- Skill and action-verb extraction
-- Job-description compatibility scoring
-- Evidence-backed claim verification
-- Risk, confidence, and verdict generation
-- Timeline and employment-span consistency checks
-- Dashboard, reports, evidence, skills, and settings views
+- Authentication with registration, login, JWT access tokens, protected routes, and current-user lookup.
+- Password reset endpoints with single-use hashed reset tokens, expiration, rate limiting, and optional Resend email delivery.
+- Protected dashboard shell for authenticated users.
+- PDF and DOCX resume upload with validation for file type, signature, empty files, and a 10 MB size limit.
+- PDF text extraction with PyMuPDF.
+- OCR fallback for low-text PDFs using PyMuPDF rendering, Pillow, OpenCV preprocessing, and Tesseract.
+- DOCX paragraph and table extraction with `python-docx`.
+- Pasted resume text flow that takes priority over uploaded files.
+- Job-description-aware verification with strictness levels: `low`, `medium`, and `high`.
+- Cross-reference setting for checking whether skills, projects, certifications, and seniority claims support each other.
+- Section-aware resume parsing, skill discovery, action-verb detection, evidence classification, and claim scoring.
+- Compatibility, confidence, risk, verdict, matched skills, missing skills, weak areas, findings, and evidence outputs.
+- Timeline analysis for year ranges, possible overlaps, gaps, and suspiciously long spans.
+- Explainability summaries, confidence reasoning, risk summaries, risk breakdowns, and positive evidence summaries.
+- Database-backed report persistence for manager-owned reports, with browser `localStorage` fallback in the frontend.
+- Report search, view, and delete flows.
+- Manager-only candidate ranking from pasted resume text.
+- Manager-only candidate ranking from multiple uploaded PDF/DOCX files.
+- Ranking session persistence with per-user ownership checks.
+- Ranking history, expanded ranking details, per-candidate detail pages, and ranking deletion.
+- PDF report generation endpoint for downloadable verification reports.
+- Security middleware for trusted hosts, CORS, HTTPS enforcement in production, and common security headers.
+- Docker build that compiles the Vite frontend, installs backend dependencies, installs Tesseract, and serves the SPA from FastAPI.
 
-## Features
+## How Verification Works
 
-- **Secure upload flow**: Validates file type, file signature, empty uploads, and a 10 MB upload limit before parsing.
-- **PDF and DOCX support**: Uses PyMuPDF for PDF text extraction and `python-docx` for DOCX paragraphs and tables.
-- **OCR fallback**: Automatically runs Tesseract OCR when a PDF has too little extractable embedded text.
-- **Image preprocessing**: Converts rendered PDF pages to grayscale and applies Otsu thresholding with OpenCV before OCR.
-- **Resume parsing**: Normalizes text, detects resume sections, and splits content into sentence-level evidence units.
-- **Skill extraction**: Uses a curated skill alias vocabulary covering software, cloud, DevOps, security, AI/ML, and API terms.
-- **Job-description matching**: Extracts required skills, domains, certifications, and action verbs from the job description.
-- **Verification scoring**: Computes compatibility, risk, confidence, weak areas, missing skills, and final verdicts.
-- **Fraud and inconsistency detection**: Flags unsupported skills, buzzword-heavy claims, weak evidence, missing JD requirements, timeline gaps, overlaps, and unusually long spans.
-- **ATS-friendly processing**: Works from normalized text and structured resume sections rather than visual layout assumptions.
-- **Results dashboard**: Shows summary metrics, findings, matched/missing skills, claim evidence, timeline analysis, and report history.
-- **Configurable strictness**: Supports low, medium, and high verification strictness plus a cross-reference toggle.
+1. A user uploads a PDF/DOCX resume or pastes resume text.
+2. Uploaded files are validated by extension, content type, binary signature, size, and emptiness.
+3. PDF or DOCX text is extracted. Low-text PDFs can trigger OCR fallback.
+4. Resume text and the job description are normalized.
+5. Resume sections are parsed and skills are discovered from section-aware evidence.
+6. Job requirements are extracted from the job description.
+7. Skill claims, missing claims, pattern-based claims, and consistency findings are generated.
+8. Evidence is classified into levels such as demonstrated, supported, mentioned, weak, or missing.
+9. The pipeline calculates compatibility, confidence, risk, weak areas, timeline signals, and verdict.
+10. The frontend renders summary, skills, evidence, reports, ranking, and candidate-detail views.
 
 ## Tech Stack
 
@@ -49,13 +62,13 @@ PathAI Verify currently focuses on:
 | App framework | React 18, Vite 6 |
 | Language | TypeScript |
 | Routing | React Router 7 |
-| Styling | Tailwind CSS 4, custom PathAI theme tokens |
-| UI primitives | Radix UI components |
+| Styling | Tailwind CSS 4, custom PathAI theme CSS |
+| UI primitives | Radix UI-based local components |
 | Icons | Lucide React, MUI icons |
-| Charts/visualization | Recharts |
+| Charts | Recharts |
 | Notifications | Sonner |
 | Animation | Motion |
-| State persistence | React context, browser `localStorage` |
+| State | React context, browser `localStorage` |
 
 ### Backend
 
@@ -63,178 +76,195 @@ PathAI Verify currently focuses on:
 | --- | --- |
 | API framework | FastAPI |
 | Server | Uvicorn |
-| Request validation | Pydantic |
-| CORS | FastAPI CORSMiddleware |
-| File upload parsing | `python-multipart`, Starlette upload handling |
-| Runtime | Python 3.11 in Docker |
+| Validation | Pydantic |
+| Database ORM | SQLAlchemy |
+| Local database default | SQLite at `pathai.db` |
+| Production database support | PostgreSQL-compatible `DATABASE_URL` |
+| Authentication | JWT with `python-jose`, bcrypt via Passlib |
+| Email provider | Optional Resend for password reset emails |
+| PDF reports | ReportLab |
 
-### AI / OCR / Analysis
+### Parsing and Analysis
 
 | Area | Technology |
 | --- | --- |
-| PDF text extraction | PyMuPDF |
+| PDF extraction | PyMuPDF |
 | DOCX extraction | python-docx |
-| OCR engine | Tesseract via pytesseract |
+| OCR | pytesseract, Tesseract OCR |
 | Image preprocessing | Pillow, OpenCV headless, NumPy |
-| Resume intelligence | Deterministic NLP-style heuristics, curated skill aliases, section-aware evidence scoring |
-| Verification logic | Compatibility scoring, confidence bands, timeline analysis, consistency signals |
-
-### Database
-
-| Area | Current implementation |
-| --- | --- |
-| Persistent backend database | Not currently configured |
-| Scan history | Stored client-side in `localStorage` |
-| Authentication/session storage | Not currently implemented |
-
-### Deployment
-
-| Area | Technology |
-| --- | --- |
-| Static frontend | Vercel configuration for Vite |
-| Full-stack container | Docker multi-stage build |
-| Backend hosting config | Railway start command |
-| Production static serving | FastAPI serves `dist/` when present |
-
-### Dev Tools
-
-| Area | Technology |
-| --- | --- |
-| Frontend package manager | npm with `package-lock.json` |
-| Design prototype package manager | pnpm lockfile in `pathai_design/` |
-| Build scripts | `npm run build`, `npm run dev`, `npm start` |
-| Python dependencies | `requirements.txt` |
+| Verification logic | Deterministic heuristics, curated skills, section-aware evidence scoring |
 
 ## Architecture
 
 ```text
-Candidate upload / pasted text
+React + Vite authenticated dashboard
         |
+        | /api/auth/*
         v
-React + Vite dashboard
+FastAPI auth + JWT + SQLAlchemy users
+
+Resume upload or pasted text
         |
         | POST /extract-text
         v
-FastAPI upload validation
+FastAPI validation
         |
-        +--> PDF: PyMuPDF text extraction
-        |       |
-        |       +--> OCR fallback: render PDF page -> OpenCV preprocessing -> Tesseract
-        |
-        +--> DOCX: python-docx paragraph/table extraction
+        +-- PDF  -> PyMuPDF text extraction -> OCR fallback when needed
+        +-- DOCX -> python-docx paragraph/table extraction
         |
         v
 Normalized resume text
         |
         | POST /verify
         v
-Section parser -> skill discovery -> JD extraction -> evidence extractor
+Section parser -> skill discovery -> JD extraction -> evidence and signal modules
         |
         v
-Verification engine
+Compatibility, confidence, risk, findings, claims, evidence, timeline, summaries
         |
-        +--> compatibility score
-        +--> risk score
-        +--> confidence score
-        +--> claims and evidence snippets
-        +--> timeline analysis
-        |
-        v
-Summary, Skills, Evidence, Reports, and Settings dashboards
-```
+        +-- POST /reports       Persist report for current manager
+        +-- POST /report/pdf    Generate downloadable PDF
 
-The backend intentionally returns explainable evidence objects rather than a black-box-only score. Each claim can include evidence level, confidence, section label, snippet text, evidence type, and warning text.
+Multiple candidates + shared JD
+        |
+        +-- POST /rank          Rank pasted candidate text
+        +-- POST /rank-files    Extract and rank uploaded files
+        |
+        v
+Persisted ranking sessions, ranking history, and candidate detail views
+```
 
 ## Folder Structure
 
 ```text
-Path-ai/
+.
 |-- backend/
-|   |-- main.py                     # FastAPI app, upload validation, API routes, SPA serving
-|   |-- analysis_engine.py          # Public analysis facade
-|   |-- parser/                     # PDF, DOCX, OCR, and legacy resume parsers
-|   |-- parsers/                    # Structured section parser
-|   |-- evidence/                   # Sentence-level evidence extraction/classification
-|   |-- verification/               # JD extraction, skill discovery, scoring pipeline
-|   |-- scoring/                    # Evidence/depth/consistency/confidence scoring
-|   |-- scorer/                     # Legacy verification scorer
-|   |-- signals/                    # Legacy skill/depth/consistency signals
-|   |-- timeline/                   # Employment timeline parsing and analysis
-|   `-- _qa_fixtures/               # Backend QA fixture documents
-|-- backend_test_fixtures/          # Additional sample PDF/DOCX/image fixtures
+|   |-- main.py                 # FastAPI app, middleware, API routes, SPA serving
+|   |-- analysis_engine.py      # Public adapter for the verification pipeline
+|   |-- auth/                   # Register, login, JWT, password reset, role guards
+|   |-- db/                     # SQLAlchemy config, models, migrations, services
+|   |-- parser/                 # PDF, DOCX, OCR, normalization, quality checks
+|   |-- parsers/                # Structured resume section parser
+|   |-- evidence/               # Evidence extraction/classification helpers
+|   |-- verification/           # Main pipeline, JD extraction, skills, years
+|   |-- signals/                # Skill, fraud, depth, consistency, explainability signals
+|   |-- scoring/                # Legacy-compatible scoring helpers
+|   |-- timeline/               # Timeline parsing and analysis
+|   |-- reporting/              # PDF report generation
+|   `-- _qa_fixtures/           # Parser QA fixtures
 |-- src/
-|   |-- main.tsx                    # React entrypoint
+|   |-- main.tsx                # React entrypoint
 |   |-- app/
-|   |   |-- App.tsx                 # App provider and router shell
-|   |   |-- routes.ts               # Dashboard routes
-|   |   |-- context/                # Verification flow and API client logic
-|   |   |-- components/             # Layout, evidence snippets, UI components
-|   |   |-- pages/                  # Upload, Summary, Skills, Evidence, Reports, Settings, Help
-|   |   `-- utils/                  # Frontend evidence normalization helpers
-|   `-- styles/                     # Tailwind input, theme tokens, fonts
-|-- pathai_design/                  # Next.js design-system prototype exported from Figma
-|-- dist/                           # Vite production build output
-|-- Dockerfile                      # Full-stack Node build + Python runtime image
-|-- vercel.json                     # Vercel static frontend deployment config
-|-- railway.json                    # Railway backend start command
-|-- requirements.txt                # Python backend dependencies
-|-- package.json                    # Root Vite frontend scripts and dependencies
-|-- package-lock.json               # npm lockfile
-`-- vite.config.ts                  # Vite config and base path support
+|   |   |-- App.tsx             # Providers and router
+|   |   |-- routes.tsx          # Route definitions and route protection
+|   |   |-- context/            # Auth and verification contexts/API clients
+|   |   |-- components/         # Dashboard layout and UI components
+|   |   |-- pages/              # Auth, upload, dashboard, reports, ranking pages
+|   |   `-- utils/              # Frontend evidence helpers
+|   `-- styles/                 # Tailwind input, theme tokens, fonts
+|-- tests/                      # Pytest backend/API/unit tests
+|-- backend_test_fixtures/      # Additional test fixtures
+|-- pathai_design/              # Separate Next.js design prototype
+|-- dist/                       # Vite production build output, when built
+|-- Dockerfile                  # Full-stack production container
+|-- requirements.txt            # Python dependencies
+|-- package.json                # Frontend scripts and dependencies
+|-- package-lock.json           # npm lockfile
+|-- vite.config.ts              # Vite config
+`-- .env.example                # Runtime configuration template
 ```
 
 ## API Endpoints
 
+### Public and Auth
+
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
 | `GET` | `/health` | Backend health check. |
-| `POST` | `/extract-text` | Accepts a PDF or DOCX upload and returns normalized extracted text. |
-| `POST` | `/score-resume` | Scores raw resume text with evidence, depth, consistency, JD compatibility, matched skills, missing skills, and action verbs. |
-| `POST` | `/verify` | Runs the full JD-aware verification pipeline and returns risk, confidence, compatibility, verdict, claims, evidence, timeline, skills, and findings. |
-| `GET` | `/` | Serves the built frontend when `dist/` exists. |
-| `GET` | `/{full_path}` | SPA fallback for built frontend routes when `dist/` exists. |
+| `POST` | `/api/auth/register` | Create a user account. Current backend assigns new users the `candidate` role. |
+| `POST` | `/api/auth/login` | Authenticate with username/password and return a bearer token. |
+| `GET` | `/api/auth/me` | Return the current authenticated user. |
+| `POST` | `/api/auth/forgot-password` | Create a password reset token and send/log a reset link. |
+| `POST` | `/api/auth/reset-password` | Reset a password with a valid single-use token. |
 
-### Example Verification Request
+### Verification and Reports
 
-```bash
-curl -X POST http://127.0.0.1:8000/verify \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "Python developer with React and Docker experience...",
-    "job_description": "We need a Python engineer with Docker and SQL.",
-    "strictness": "medium",
-    "cross_reference_sync": true
-  }'
-```
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/extract-text` | Accept a PDF or DOCX upload and return normalized extracted text plus warnings. |
+| `POST` | `/score-resume` | Legacy-compatible text scoring endpoint. |
+| `POST` | `/verify` | Run the main JD-aware verification pipeline. |
+| `POST` | `/report/pdf` | Generate a downloadable PDF verification report. |
+| `POST` | `/reports` | Persist a verification report for the current manager. |
+| `GET` | `/reports` | List reports owned by the current manager. |
+| `DELETE` | `/reports/{report_id}` | Delete a report owned by the current manager. |
 
-## OCR Pipeline
+### Ranking
 
-PathAI Verify uses a two-stage PDF extraction strategy:
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/rank` | Manager-only ranking for multiple pasted candidate resumes. |
+| `POST` | `/rank-files` | Manager-only ranking for multiple uploaded PDF/DOCX resumes. |
+| `GET` | `/rankings` | List ranking sessions owned by the current manager. |
+| `GET` | `/rankings/{ranking_id}` | Return one ranking session with candidate results. |
+| `GET` | `/rankings/{ranking_id}/candidates/{ranking_candidate_id}` | Return full analysis for one candidate in a ranking. |
+| `DELETE` | `/rankings/{ranking_id}` | Delete a ranking session owned by the current manager. |
 
-1. **Embedded text extraction**: `backend/parser/pdf_parser.py` opens the PDF with PyMuPDF and extracts text from each page.
-2. **OCR fallback**: If extracted text is below the 50-character threshold, the backend calls `extract_text_with_ocr()`.
-3. **PDF rendering**: The OCR parser renders up to 10 pages at a higher scale using PyMuPDF.
-4. **Preprocessing**: Each rendered page is converted through Pillow/OpenCV, grayscaled, and thresholded with Otsu binarization.
-5. **Tesseract OCR**: pytesseract extracts English text from the processed image.
-6. **Cleanup**: Page chunks are joined and blank lines are removed before normal resume normalization.
+When `dist/` exists, FastAPI also serves the built frontend at `/`, `/assets/*`, and SPA fallback routes.
 
-This enables scanned or image-only PDFs to enter the same verification pipeline as text-native PDFs.
+## Frontend Routes
+
+| Route | Access | Purpose |
+| --- | --- | --- |
+| `/login` | Public | Sign in. |
+| `/register` | Public | Create an account and sign in. |
+| `/forgot-password` | Public | Request a password reset link. |
+| `/reset-password` | Public | Submit a password reset token and new password. |
+| `/` | Authenticated | Upload/paste resume and job description. |
+| `/summary` | Authenticated | Verification verdict, scores, summaries, and findings. |
+| `/skills` | Authenticated | Claim and skill evidence breakdown. |
+| `/evidence` | Authenticated | Evidence snippets, findings, timeline, and skill timeline insights. |
+| `/reports` | Authenticated | Search, view, and delete saved reports. |
+| `/settings` | Authenticated | Strictness and cross-reference preferences. |
+| `/help` | Authenticated | In-app help content. |
+| `/rank` and `/ranking` | Manager only | Rank candidates from pasted text or uploaded files. |
+| `/ranking-history` | Manager only | View and delete stored ranking sessions. |
+| `/ranking-history/:rankingId/candidate/:candidateId` | Manager only | Candidate analysis detail from ranking history. |
+| `/rank/:rankingId/candidate/:candidateId` | Manager only | Candidate analysis detail from a fresh ranking. |
+| `/rankings/:rankingId/candidates/:candidateId` | Manager only | Candidate analysis detail route alias. |
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and adjust values for local or deployed use.
+
+| Variable | Purpose | Default in code/example |
+| --- | --- | --- |
+| `JWT_SECRET_KEY` | Required secret for signing JWT access tokens. Backend startup fails without it. | `change_me_to_a_random_secret` in `.env.example` |
+| `DATABASE_URL` | SQLAlchemy database URL. | `sqlite:///pathai.db` |
+| `CORS_ORIGINS` | Comma-separated allowed frontend origins. | `http://localhost:3000,http://localhost:5173` |
+| `FRONTEND_URL` | Base URL used in password reset links. | `http://localhost:5173` |
+| `ENVIRONMENT` | Set to `production` to require `X-Forwarded-Proto: https`. | `development` |
+| `ALLOWED_HOSTS` | Trusted Host middleware allowlist. | `localhost,[IP_ADDRESS],testserver` in code |
+| `JWT_EXPIRE_MINUTES` | JWT lifetime. | `60` |
+| `RESET_TOKEN_EXPIRE_MINUTES` | Password reset token lifetime. | `15` |
+| `MAX_LOGIN_ATTEMPTS` | Login attempts before lockout/rate limit. | `5` |
+| `LOGIN_WINDOW_SECONDS` | Login rate-limit window. | `300` |
+| `ACCOUNT_LOCKOUT_SECONDS` | Account lockout duration. | `900` |
+| `MAX_RESET_ATTEMPTS` | Password reset attempts allowed per window. | `3` |
+| `RESET_WINDOW_SECONDS` | Password reset rate-limit window. | `3600` |
+| `RESEND_API_KEY` | Optional API key for sending reset emails through Resend. | unset |
+| `FROM_EMAIL` | Sender address for reset emails. | `[EMAIL]` |
+| `PORT` | Server port used by Docker command. | `8000` |
+| `VITE_BASE_PATH` | Frontend build base path. | `/` |
 
 ## Installation
 
 ### Prerequisites
 
-- Node.js 20 recommended. The Docker build uses `node:20-bookworm-slim`.
-- Python 3.11 recommended. The Docker runtime uses `python:3.11-slim`.
-- Tesseract OCR installed locally if you want OCR fallback outside Docker.
+- Node.js 20 is recommended.
+- Python 3.11 is recommended.
+- Tesseract OCR is required for local OCR fallback.
 - npm for the root Vite app.
-
-### Clone the repository
-
-```bash
-git clone <repository-url>
-cd Path-ai
-```
 
 ### Install frontend dependencies
 
@@ -250,247 +280,157 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-On macOS/Linux, activate the virtual environment with:
+On macOS/Linux:
 
 ```bash
 source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
 ### Install Tesseract locally
 
-Docker installs Tesseract automatically. For local backend OCR, install it on the host system:
+Docker installs Tesseract automatically. For local OCR fallback, install it on the host:
 
 ```bash
+# Windows
+winget install UB-Mannheim.TesseractOCR
+
 # macOS
 brew install tesseract
 
 # Ubuntu/Debian
 sudo apt-get update
 sudo apt-get install tesseract-ocr
-
-# Windows
-winget install UB-Mannheim.TesseractOCR
 ```
 
-If Tesseract is not available locally, text-native PDFs and DOCX files can still be parsed, but OCR fallback for scanned PDFs will fail or return empty text.
+## Running Locally
 
-## Environment Variables
+Create a `.env` file first. At minimum, set `JWT_SECRET_KEY`.
 
-Only the following environment variables are referenced by the current codebase:
-
-```env
-# Frontend: send API calls to a separately hosted backend.
-# In development, the frontend defaults to http://127.0.0.1:8000.
-# In production, an empty value uses same-origin relative API paths.
-VITE_API_BASE_URL=http://127.0.0.1:8000
-
-# Frontend build base path. Defaults to /.
-VITE_BASE_PATH=/
-
-# Backend CORS allowlist. Comma-separated. If omitted, local dev origins and *.vercel.app are used.
-CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
-
-# Hosting platforms commonly provide this automatically.
-PORT=8000
+```bash
+copy .env.example .env
 ```
 
-There is no `OPENAI_API_KEY`, `DATABASE_URL`, or `JWT_SECRET` currently used in the repository.
-
-## Running the Project
-
-### Run the backend
+Run the backend:
 
 ```bash
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-Health check:
-
-```bash
-curl http://127.0.0.1:8000/health
-```
-
-### Run the frontend
-
-In a second terminal:
+Run the frontend in another terminal:
 
 ```bash
 npm run dev
 ```
 
-Open the Vite URL printed in the terminal, usually:
+Open:
 
 ```text
 http://localhost:5173
 ```
 
-### Build the frontend
+In development, the frontend calls the backend at `http://localhost:8000`.
+
+## Production Build
+
+Build the frontend:
 
 ```bash
 npm run build
 ```
 
-### Serve the production frontend from FastAPI
-
-After building, `dist/` exists and FastAPI can serve the SPA:
+Serve the built SPA from FastAPI:
 
 ```bash
-npm run build
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-Then open:
+Open:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-### Run with Docker
+## Docker
 
 ```bash
 docker build -t pathai-verify .
-docker run --rm -p 8000:8000 pathai-verify
+docker run --rm -p 8000:8000 --env-file .env pathai-verify
 ```
 
-The Docker image builds the Vite frontend, installs Python dependencies, installs `tesseract-ocr`, and starts Uvicorn.
+The Docker image:
 
-## Resume Verification Flow
-
-1. A user uploads a PDF/DOCX resume or pastes resume text directly.
-2. If a file is uploaded, the backend validates size, extension, content type, and signature.
-3. PDF/DOCX text is extracted. Scanned PDFs trigger OCR fallback.
-4. The frontend sends extracted or pasted text plus the job description to `/verify`.
-5. The verification pipeline normalizes text and groups content into resume sections.
-6. Skills are discovered using curated aliases and section-aware sentence matching.
-7. Job description requirements are extracted from the JD text.
-8. Evidence snippets are classified as demonstrated, supported, mentioned, weak, or missing.
-9. The engine computes compatibility, risk, confidence, weak areas, findings, timeline analysis, and verdict.
-10. The dashboard renders summary metrics, claim details, evidence snippets, timelines, and report history.
-
-## Verification and Scoring Logic
-
-The main pipeline lives in `backend/verification/pipeline.py` and combines several scoring signals:
-
-- **Compatibility score**: Based on overlap between job-description requirements and discovered resume skills, with a coverage bonus for broader skill evidence.
-- **Claim evidence level**: Skill claims are evaluated using section context, implementation-heavy wording, evidence count, and whether a skill is required by the JD.
-- **Confidence score**: Uses evidence-level confidence bands and weighted section scores so claims backed by experience/projects rank higher than bare skill-list mentions.
-- **Risk score**: Increases for missing required skills, weak claims, unsupported claims, lack of action verbs, and cross-reference findings.
-- **Timeline analysis**: Extracts year ranges, detects overlapping employment spans, possible gaps, and unusually long single spans.
-- **Strictness**: `low`, `medium`, and `high` modes adjust penalties and evidence expectations.
-
-Current analysis is deterministic and explainable. The code does not currently call an external LLM API.
-
-## Dashboard Views
-
-| Route | Purpose |
-| --- | --- |
-| `/` | Upload/paste resume and job description, then run verification. |
-| `/summary` | Candidate verdict, confidence, compatibility, risk, findings, matched/missing skills, and action verbs. |
-| `/skills` | Searchable claim and skill breakdown with confidence and evidence tiers. |
-| `/evidence` | Sentence-level evidence snippets, risk findings, timeline ranges, and skill first-seen insights. |
-| `/reports` | Local scan history stored in browser `localStorage`. |
-| `/settings` | Strictness level and cross-reference sync settings. |
-| `/help` | In-app help content. |
-
-## Deployment
-
-### Vercel
-
-`vercel.json` is configured for the Vite frontend:
-
-```json
-{
-  "installCommand": "npm ci",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "framework": "vite"
-}
-```
-
-For a Vercel-only frontend deployment:
-
-1. Set the project framework to Vite.
-2. Use `npm ci` as the install command.
-3. Use `npm run build` as the build command.
-4. Use `dist` as the output directory.
-5. Set `VITE_API_BASE_URL` to the deployed backend URL.
-6. Set the backend `CORS_ORIGINS` to include the Vercel frontend domain.
-
-Deployment note: Vercel will host the static frontend only with the current configuration. The FastAPI backend and OCR dependencies need a separate backend host unless the frontend is served by the FastAPI Docker image.
-
-### Docker
-
-The root `Dockerfile` supports a full-stack deployment:
-
-- Builds the Vite frontend in a Node 20 stage.
-- Installs Python dependencies in a Python 3.11 runtime.
+- Installs frontend dependencies with `npm ci`.
+- Builds the Vite app.
+- Installs Python dependencies.
 - Installs `tesseract-ocr`.
-- Copies `dist/` into the runtime image.
+- Copies the built `dist/` folder into the runtime image.
 - Starts `uvicorn backend.main:app`.
 
-This is the most complete deployment path for OCR because the container includes Tesseract.
+## Database
 
-### Railway
+The backend uses SQLAlchemy and creates tables on startup with `Base.metadata.create_all()`. It also runs lightweight migrations from `backend/db/migrate.py`.
 
-`railway.json` starts the backend with:
+Implemented tables include:
 
-```bash
-uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+- `users`
+- `password_reset_tokens`
+- `reports`
+- `jobs`
+- `candidates`
+- `rankings`
+- `ranking_candidates`
+
+SQLite is the default local database. PostgreSQL-compatible databases can be used by setting `DATABASE_URL`.
+
+## Authentication and Roles
+
+The backend supports `candidate` and `manager` role checks. General dashboard routes require authentication. Ranking and persisted report API endpoints require the `manager` role.
+
+Important current behavior: `POST /api/auth/register` always creates users with the `candidate` role, even though the frontend registration form displays a role selector. To use manager-only ranking features, a user's role must currently be updated in the database or seeded externally.
+
+## Ranking Formula
+
+Candidate ranking uses the same deterministic analysis pipeline as single-resume verification. The composite score is:
+
+```text
+rank_score = compatibility_score * 0.7 + confidence * 0.2 - risk_score * 0.1
 ```
 
-Railway deployments should ensure Python dependencies from `requirements.txt` are installed and Tesseract is available if OCR fallback is required.
+Results are sorted by descending `rank_score` and persisted with full candidate analysis data when the database write succeeds.
 
-## Screenshots
+## Testing
 
-_Add dashboard screenshots here._
+Run the backend test suite:
 
-Suggested captures:
+```bash
+python -m pytest tests/
+```
 
-- Upload and scan progress
-- Summary verdict dashboard
-- Skills and claims breakdown
-- Evidence snippets and timeline analysis
-- Reports history
+Run frontend type checking:
 
-## Design Provenance
+```bash
+npm run typecheck
+```
 
-The `pathai_design/` directory contains a Next.js design-system prototype for the PathAI Verify interface. The original mockup reference is:
-
-https://www.figma.com/design/FjxvRSNA7R3lPypTfKBNPw/Revise-PathAI-Verify-Mockup
-
-The production app in this repository is the root Vite application under `src/`.
-
-## Future Improvements
-
-- LLM-based semantic verification for richer project and responsibility reasoning
-- Recruiter/admin dashboards with team-level report management
-- Backend database for persistent candidates, scans, users, and audit trails
-- Authentication and role-based access control
-- LinkedIn, GitHub, portfolio, and certification verification integrations
-- Fraud confidence calibration with labeled resume datasets
-- Multilingual resume parsing and OCR language packs
-- Exportable PDF reports for hiring teams
-- Voice interview analysis and claim cross-checking against interview transcripts
-- Automated test suite for parser fixtures, OCR fallback, and API contracts
-
-## Contributing
-
-Contributions are welcome. Please keep changes focused, tested, and aligned with the existing architecture.
-
-1. Create a feature branch.
-2. Install frontend and backend dependencies.
-3. Run the relevant local checks before opening a pull request.
-4. Document any new environment variables or deployment requirements.
-5. Include screenshots for UI changes and sample API responses for backend changes.
-
-Recommended checks:
+Build the frontend:
 
 ```bash
 npm run build
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-There is no dedicated automated test command checked into the repository yet.
+The test suite includes coverage for authentication, password reset, file extraction endpoints, verification API behavior, skill/fraud/timeline/ranking signals, ranking scores, and ranking ownership.
+
+## Current Limitations
+
+- The analysis is deterministic and heuristic-based, not semantic model reasoning.
+- The frontend upload accept list includes `.doc`, but the backend only accepts valid PDF and DOCX files.
+- New registrations are stored as `candidate` users; manager role assignment is not currently wired through the backend registration schema.
+- OCR quality depends on scan resolution, language, layout, and Tesseract availability.
+- Password reset email delivery requires `RESEND_API_KEY`; without it, reset links are logged for development.
+- Rate limiting is in-memory, so it resets when the backend process restarts and is not shared across multiple server instances.
+- SQLite is suitable for local development; production deployments should use a managed database through `DATABASE_URL`.
+- The `pathai_design/` directory is a separate Next.js design prototype, not the production app.
 
 ## License
 

@@ -42,7 +42,7 @@ export function Skills() {
     );
   }
 
-  const skills = currentScan.claimViews as ClaimView[];
+  const skills = (currentScan.claimViews as ClaimView[]).filter((claim) => claim.evidenceLevel !== "missing");
   const normalizedQ = useMemo(() => query.trim().toLowerCase(), [query]);
 
   const filteredSkills = useMemo(() => {
@@ -74,7 +74,7 @@ export function Skills() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-foreground">Claims Breakdown</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Search extracted skills and claims. Try:{" "}
@@ -84,7 +84,7 @@ export function Skills() {
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full sm:w-auto">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -96,7 +96,7 @@ export function Skills() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="bg-secondary/70 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-electric-blue/30"
+            className="w-full sm:w-auto bg-secondary/70 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-electric-blue/30"
             aria-label="Filter by status"
           >
             <option value="All">All statuses</option>
@@ -149,7 +149,7 @@ export function Skills() {
         </div>
       )}
 
-      <div className="glass-card border border-border rounded-xl overflow-hidden">
+      <div className="glass-card border border-border rounded-xl overflow-x-auto">
         {currentScan.skills.length > 0 && (
           <div className="border-b border-border bg-secondary/40 px-6 py-4">
             <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground mb-3">Extracted Skills</p>

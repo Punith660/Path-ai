@@ -1,4 +1,4 @@
-"""Evidence quality levels: demonstrated, supported, mentioned, weak, missing."""
+"""Evidence quality levels: demonstrated, supported, weak, missing, inflated."""
 
 from __future__ import annotations
 
@@ -8,11 +8,16 @@ from typing import Literal
 from ..verification.knowledge import ACTION_VERBS, BUZZWORDS
 from .text import contains_phrase
 
-EvidenceLevel = Literal["demonstrated", "supported", "mentioned", "weak", "missing"]
+EvidenceLevel = Literal["demonstrated", "supported", "weak", "missing", "inflated"]
 
 _IMPLEMENTATION_SECTIONS = frozenset({"experience", "projects", "achievements"})
 _CONTEXT_SECTIONS = frozenset({"experience", "projects", "education", "certifications", "achievements"})
 _SKILLS_ONLY_SECTION = "skills"
+
+# Min action verbs in a sentence to consider it action-rich
+_ACTION_RICH_THRESHOLD = 2
+# Max distinct skill-like terms before flagging as stuffed
+_STUFF_THRESHOLD = 5
 
 
 def _has_strong_action(sentence: str) -> bool:
@@ -23,6 +28,12 @@ def _has_strong_action(sentence: str) -> bool:
     return False
 
 
+def _action_verb_count(sentence: str) -> int:
+    """Count distinct action verbs in a sentence."""
+    lower = sentence.lower()
+    return sum(1 for v in ACTION_VERBS if re.search(rf"\b{re.escape(v)}\b", lower))
+
+
 def _has_quant(sentence: str) -> bool:
     return bool(
         re.search(
@@ -31,6 +42,18 @@ def _has_quant(sentence: str) -> bool:
             re.I,
         )
     )
+
+
+def _is_keyword_stuffed(sentence: str, skill_aliases_for_context: list[str] | None = None) -> bool:
+    """Detect sentences that are just lists of skills without implementation context."""
+    # Very long comma-separated lists are suspicious
+    if sentence.count(",") >= 5 and len(sentence) < 350:
+        return True
+    # Count distinct tech-like tokens
+    tokens = re.findall(r"[A-Z][a-z]+(?:\s[A-Z][a-z]+)*|#\w+|\w+\+{2}", sentence)
+    if len(tokens) >= _STUFF_THRESHOLD and not _has_strong_action(sentence) and not _has_quant(sentence):
+        return True
+    return False
 
 
 def _is_skills_list_line(sentence: str) -> bool:
@@ -60,15 +83,24 @@ def classify_skill_evidence(
     also_in_implementation: bool,
     only_skills_hits: bool,
 ) -> EvidenceLevel:
+    """Classify a sentence by how strongly it proves the skill claim.
+
+    - keyword stuffing in impl sections downgrades demonstrated -> supported
+    - action verb proximity upgrades sentences in impl sections
     """
-    Classify a single sentence hit for a skill given aggregate context flags.
-    """
+
     if section == _SKILLS_ONLY_SECTION and only_skills_hits and not also_in_implementation:
         if _is_vague(sentence):
             return "weak"
-        return "mentioned"
+        return "inflated"
 
     if section in _IMPLEMENTATION_SECTIONS:
+        # Keyword stuffing degrades even impl sentences
+        if _is_keyword_stuffed(sentence, aliases):
+            return "supported"
+        # Multiple action verbs + metrics = strongest signal
+        if _has_quant(sentence) and _action_verb_count(sentence) >= _ACTION_RICH_THRESHOLD:
+            return "demonstrated"
         if _has_strong_action(sentence) or _has_quant(sentence):
             return "demonstrated"
         return "supported"
@@ -99,12 +131,14 @@ def aggregate_skill_level(
     has_any_hit: bool,
     required_by_jd: bool,
 ) -> EvidenceLevel:
+    """Use the strongest snippet level; missing JD requirements stay explicit."""
+
     if not has_any_hit:
         return "missing" if required_by_jd else "weak"
     if not per_snippet_levels:
         return "weak"
-    priority = ["demonstrated", "supported", "mentioned", "weak", "missing"]
-    best: EvidenceLevel = "missing"
+    priority = ["demonstrated", "supported", "weak", "missing", "inflated"]
+    best: EvidenceLevel = "inflated"
     for lvl in per_snippet_levels:
         if priority.index(lvl) < priority.index(best):
             best = lvl
@@ -116,4 +150,3 @@ def indirect_skill_reference(skill: str, sentence: str) -> bool:
     if skill != "SQL":
         return False
     return bool(re.search(r"\b(postgres(?:ql)?|mysql|sqlite|relational\s+db)\b", sentence, re.I))
-

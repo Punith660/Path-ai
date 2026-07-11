@@ -8,10 +8,13 @@ from typing import Any, Literal
 
 from ..parsers.section_parser import SectionKey, all_indexed_sentences
 from ..verification.knowledge import SKILL_ALIASES
-from .classifier import aggregate_skill_level, classify_skill_evidence, indirect_skill_reference
+from .classifier import aggregate_skill_level, classify_skill_evidence, indirect_skill_reference, _action_verb_count, _is_keyword_stuffed
 from .text import contains_phrase, snippet_signature, truncate_snippet
 
-EvidenceLevel = Literal["demonstrated", "supported", "mentioned", "weak", "missing"]
+EvidenceLevel = Literal["demonstrated", "supported", "weak", "missing", "inflated"]
+
+# Bonus when action verb appears in same sentence as skill mention
+_ACTION_VERB_BONUS = 0.15
 
 
 @dataclass
@@ -55,6 +58,12 @@ def _is_noise_sentence(sentence: str, aliases: list[str]) -> bool:
     return False
 
 
+def _action_verb_proximity(sentence: str) -> float:
+    """Reward sentences where action verbs appear near the skill mention."""
+    count = _action_verb_count(sentence)
+    return min(_ACTION_VERB_BONUS * count, 0.25)
+
+
 def _match_sentence(sentence: str, skill: str, aliases: list[str]) -> bool:
     if any(contains_phrase(sentence, a) for a in aliases):
         return True
@@ -70,6 +79,8 @@ def extract_skill_evidence(
     required_by_jd: bool,
     global_used_snippets: set[str],
 ) -> tuple[list[EvidenceHit], EvidenceLevel]:
+    """Select the best sentence snippets for one skill and summarize evidence strength."""
+
     aliases = SKILL_ALIASES.get(skill, [skill.lower()])
     indexed = all_indexed_sentences(sections)
 
@@ -83,7 +94,10 @@ def extract_skill_evidence(
 
     candidates: list[tuple[float, SectionKey, str]] = []
     for section, sentence in all_matches:
+        # Implementation sections outrank skills lists because they show use, not just mention.
         base = _alias_match_score(sentence, aliases) + _section_priority(section) * 0.55
+        # Action verb proximity bonus rewards sentences that show active usage
+        base += _action_verb_proximity(sentence)
         if _is_noise_sentence(sentence, aliases):
             base -= 0.28
         candidates.append((base, section, sentence))
@@ -98,6 +112,7 @@ def extract_skill_evidence(
         for score, section, sentence in candidates[:12]:
             snip = truncate_snippet(sentence)
             sig = snippet_signature(snip)
+            # Prefer unique snippets across claims, but allow reuse if this skill has no evidence.
             if use_global_skip and sig in global_used_snippets and len(hits_out) > 0:
                 continue
             if sig in seen_sig:

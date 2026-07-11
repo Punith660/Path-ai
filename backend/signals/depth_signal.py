@@ -1,58 +1,54 @@
+"""Depth signals: action verbs, compatibility score, timeline, and section summary."""
+
 from __future__ import annotations
 
-import re
+from typing import Any
+
+from ..evidence.text import split_sentences
+from ..timeline.analysis import analyze_employment_spans, extract_timeline_entries, skill_timeline_insights
+from ..verification.knowledge import ACTION_VERBS
 
 
-ACTION_VERBS = [
-    "analyzed",
-    "automated",
-    "built",
-    "collaborated",
-    "configured",
-    "created",
-    "deployed",
-    "designed",
-    "developed",
-    "engineered",
-    "implemented",
-    "improved",
-    "maintained",
-    "managed",
-    "optimized",
-    "secured",
-]
-CONTEXT_TERMS = ["project", "system", "pipeline", "application", "api"]
+def detect_action_verbs(text: str) -> list[str]:
+    """Return action verbs found in the resume text, preserving original order."""
+    from ..evidence.text import contains_phrase
+
+    verbs: list[str] = []
+    for verb in ACTION_VERBS:
+        if any(contains_phrase(sentence, verb) for sentence in split_sentences(text)):
+            verbs.append(verb)
+    return verbs
 
 
-def _count_phrase_occurrences(text: str, phrase: str) -> int:
-    escaped = re.escape(phrase)
-    pattern = rf"(?<![a-z0-9]){escaped}(?![a-z0-9])"
-    return len(re.findall(pattern, text, flags=re.IGNORECASE))
+def compute_compatibility(
+    resume_skills: dict[str, int],
+    required_skills: set[str],
+    matched_skills: list[str],
+) -> int:
+    """Compute compatibility score favoring JD coverage but rewarding broad skill evidence."""
+    resume_skill_count = max(1, len(resume_skills))
+    match_ratio = len(matched_skills) / max(1, len(required_skills)) if required_skills else min(1.0, len(resume_skills) / 8)
+    coverage_bonus = min(18, len(set(matched_skills)) * 2)
+    return round(max(0, min(100, (match_ratio * 76) + coverage_bonus)))
 
 
-def compute_depth_signal(text: str, skill_counts: dict[str, int]) -> dict:
-    detected_verbs = [verb for verb in ACTION_VERBS if _count_phrase_occurrences(text, verb) > 0]
-    has_context = any(_count_phrase_occurrences(text, term) > 0 for term in CONTEXT_TERMS)
-    total_skill_mentions = sum(skill_counts.values())
+def compute_timeline_signals(
+    text: str,
+    sections: dict[str, Any],
+    resume_skills: list[str],
+) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]]]:
+    """Extract timeline entries, analyze employment spans, and produce skill timeline insights."""
+    timeline_entries = extract_timeline_entries(text)
+    timeline_analysis = analyze_employment_spans(timeline_entries)
+    skill_timeline = skill_timeline_insights(sections, sorted(resume_skills))
+    return timeline_entries, timeline_analysis, skill_timeline
 
-    score = 0.2
-    flags: list[str] = []
 
-    if detected_verbs:
-        score += 0.4
-    else:
-        flags.append("No action verbs detected")
-
-    if has_context:
-        score += 0.4
-    else:
-        flags.append("No project context found")
-
-    if total_skill_mentions >= 4 and not detected_verbs:
-        score = min(score, 0.3)
-        flags.append("High number of tools with low depth")
-
+def compute_resume_sections_summary(sections: dict[str, Any]) -> dict[str, int]:
+    """Count blocks per section for the API response."""
     return {
-        "score": max(0.0, min(1.0, score)),
-        "flags": flags,
+        "skills_blocks": len(sections.get("skills") or []),
+        "experience_blocks": len(sections.get("experience") or []),
+        "projects_blocks": len(sections.get("projects") or []),
+        "education_blocks": len(sections.get("education") or []),
     }

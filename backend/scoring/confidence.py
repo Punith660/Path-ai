@@ -8,18 +8,20 @@ from typing import Literal
 from ..evidence.extractor import EvidenceHit
 from ..verification.knowledge import SECTION_WEIGHT, STRICTNESS
 
-EvidenceLevel = Literal["demonstrated", "supported", "mentioned", "weak", "missing"]
+EvidenceLevel = Literal["demonstrated", "supported", "weak", "missing", "inflated"]
 
 _LEVEL_BANDS: dict[EvidenceLevel, tuple[int, int]] = {
     "demonstrated": (85, 98),
     "supported": (70, 84),
-    "mentioned": (45, 69),
     "weak": (20, 44),
     "missing": (0, 19),
+    "inflated": (45, 69),
 }
 
 
 def _jitter(skill: str, claim_key: str, lo: int, hi: int) -> int:
+    """Deterministic variance keeps repeated claims from all showing identical scores."""
+
     raw = hashlib.sha256(f"{skill}|{claim_key}|confidence".encode()).hexdigest()
     n = int(raw[:8], 16)
     span = max(0, hi - lo)
@@ -27,13 +29,17 @@ def _jitter(skill: str, claim_key: str, lo: int, hi: int) -> int:
 
 
 def weighted_base_score(hits: list[EvidenceHit], *, strictness: str) -> float:
+    """Convert section quality and match strength into a structural confidence base."""
+
     if not hits:
         return 0.0
     s = STRICTNESS.get(strictness, STRICTNESS["medium"])
     total = 0.0
     for h in hits:
         w = SECTION_WEIGHT.get(h.section, 3)
-        total += w * (0.85 + 0.15 * min(1.0, max(0.0, h.match_score)))
+        # Bonus for experience/projects sections - they carry more weight
+        section_bonus = 1.2 if h.section in ("experience", "projects") else 1.0
+        total += w * section_bonus * (0.85 + 0.15 * min(1.0, max(0.0, h.match_score)))
     if not hits:
         return 0.0
     avg = total / max(1, len(hits))
@@ -52,6 +58,8 @@ def confidence_for_claim(
     strictness: str,
     claim_type: str = "skill",
 ) -> int:
+    """Keep confidence inside the evidence tier band while nudging by source quality."""
+
     lo, hi = _LEVEL_BANDS[level]
     base = weighted_base_score(hits, strictness=strictness) if hits else 0.0
 

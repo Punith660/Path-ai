@@ -89,7 +89,7 @@ export function Upload() {
       </div>
 
       <form onSubmit={startScan} className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <div className="space-y-5 lg:col-span-3">
+        <div className="space-y-5 lg:col-span-3 w-full min-w-0">
           <div className="glass-card rounded-xl p-5 space-y-4">
             <div className="flex items-center gap-2 text-sm font-medium text-foreground">
               <User className="w-4 h-4 text-muted-foreground" />
@@ -160,7 +160,7 @@ export function Upload() {
           </div>
         </div>
 
-        <div className="space-y-5 lg:col-span-2">
+        <div className="space-y-5 lg:col-span-2 w-full min-w-0">
           <div className="glass-card rounded-xl p-5 space-y-4">
             <div className="flex items-center gap-2 text-sm font-medium text-foreground">
               <Briefcase className="w-4 h-4 text-muted-foreground" />

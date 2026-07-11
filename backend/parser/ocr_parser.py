@@ -15,24 +15,23 @@ logger = logging.getLogger(__name__)
 
 
 def preprocess_image(image: Image.Image) -> Image.Image:
-    """
-    Convert to grayscale and apply basic thresholding for better OCR.
-    """
-    # PIL to OpenCV
+    """Reduce visual noise before OCR; thresholding improves text/background contrast."""
+
     open_cv_image = np.array(image)
-    # Grayscale
     gray = cv2.cvtColor(open_cv_image, cv2.COLOR_RGB2GRAY)
-    # Threshold
     _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    # Back to PIL
     return Image.fromarray(thresh)
 
 
+_MAX_PIXELS_PER_PAGE = 10_000_000
+
+
 def extract_text_with_ocr(pdf_bytes: bytes, max_pages: int = 10) -> str:
-    """
-    Extract text from PDF using OCR fallback.
-    """
+    """Render PDF pages to images and OCR them when embedded text is unavailable."""
+
     chunks: List[str] = []
+    ocr_pages: int = 0
+    blank_pages: int = 0
     
     try:
         with fitz.open(stream=pdf_bytes, filetype="pdf") as document:
@@ -40,24 +39,83 @@ def extract_text_with_ocr(pdf_bytes: bytes, max_pages: int = 10) -> str:
             
             for page_num in range(num_pages):
                 page = document[page_num]
-                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # Higher DPI for better OCR
+                # Scale down if pixel count would exceed limit
+                rect = page.rect
+                w, h = int(rect.width), int(rect.height)
+                base_pixels = w * h
+                if base_pixels > _MAX_PIXELS_PER_PAGE:
+                    # Reduce resolution proportionally
+                    scale = (_MAX_PIXELS_PER_PAGE / base_pixels) ** 0.5
+                    matrix = fitz.Matrix(scale, scale)
+                else:
+                    # 2x render balances OCR accuracy against CPU/memory cost.
+                    matrix = fitz.Matrix(2, 2)
+                pix = page.get_pixmap(matrix=matrix)
                 img_data = pix.tobytes("ppm")
                 image = Image.open(BytesIO(img_data))
                 
-                # Preprocess
                 processed_image = preprocess_image(image)
                 
-                # OCR
                 text = pytesseract.image_to_string(processed_image, lang="eng")
                 text = text.strip()
+                ocr_pages += 1
                 if text:
                     chunks.append(text)
+                else:
+                    blank_pages += 1
                     
     except Exception as e:
         logger.warning("OCR extraction failed: %s", str(e))
         return ""
     
-    # Basic cleanup: join pages, normalize newlines/spaces
+    # Return only non-empty OCR lines so downstream section parsing sees stable text.
     full_text = "\n\n".join(chunks)
     full_text = "\n".join(line.strip() for line in full_text.splitlines() if line.strip())
     return full_text
+
+
+def extract_text_with_ocr_detailed(pdf_bytes: bytes, max_pages: int = 10) -> tuple[str, dict]:
+    """Like extract_text_with_ocr but returns OCR metadata (page count, blank pages)."""
+    chunks: List[str] = []
+    ocr_pages: int = 0
+    blank_pages: int = 0
+    
+    try:
+        with fitz.open(stream=pdf_bytes, filetype="pdf") as document:
+            num_pages = min(len(document), max_pages)
+            
+            for page_num in range(num_pages):
+                page = document[page_num]
+                # Scale down if pixel count would exceed limit
+                rect = page.rect
+                w, h = int(rect.width), int(rect.height)
+                base_pixels = w * h
+                if base_pixels > _MAX_PIXELS_PER_PAGE:
+                    scale = (_MAX_PIXELS_PER_PAGE / base_pixels) ** 0.5
+                    matrix = fitz.Matrix(scale, scale)
+                else:
+                    matrix = fitz.Matrix(2, 2)
+                pix = page.get_pixmap(matrix=matrix)
+                img_data = pix.tobytes("ppm")
+                image = Image.open(BytesIO(img_data))
+                processed_image = preprocess_image(image)
+                text = pytesseract.image_to_string(processed_image, lang="eng")
+                text = text.strip()
+                ocr_pages += 1
+                if text:
+                    chunks.append(text)
+                else:
+                    blank_pages += 1
+    except Exception as e:
+        logger.warning("OCR extraction failed: %s", str(e))
+        return "", {"ocr_attempted": True, "ocr_pages_processed": 0, "ocr_blank_pages": 0, "ocr_failed": True}
+
+    full_text = "\n\n".join(chunks)
+    full_text = "\n".join(line.strip() for line in full_text.splitlines() if line.strip())
+    ocr_meta = {
+        "ocr_attempted": True,
+        "ocr_pages_processed": ocr_pages,
+        "ocr_blank_pages": blank_pages,
+        "ocr_chars_extracted": len(full_text),
+    }
+    return full_text, ocr_meta

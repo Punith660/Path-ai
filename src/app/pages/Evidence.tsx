@@ -10,7 +10,7 @@ function legacyBadgeClasses(status: string) {
     case 'verified':
       return 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20';
     case 'inflated':
-      return 'bg-amber-500/10 text-amber-300 border-amber-500/20';
+      return 'bg-amber-500/10 text-amber-600 dark:text-amber-300 border-amber-500/20';
     case 'buzzword':
       return 'bg-rose-500/10 text-rose-300 border-rose-500/20';
     default:
@@ -25,7 +25,7 @@ function levelBadgeClasses(level?: EvidenceLevel | string) {
     case 'supported':
       return 'bg-sky-500/15 text-sky-200 border-sky-500/25';
     case 'mentioned':
-      return 'bg-amber-500/15 text-amber-200 border-amber-500/25';
+      return 'bg-amber-500/15 text-amber-600 dark:text-amber-200 border-amber-500/25';
     case 'weak':
       return 'bg-orange-500/15 text-orange-200 border-orange-500/25';
     case 'missing':
@@ -77,7 +77,7 @@ export function Evidence() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {currentScan.evidence.length > 0 ? (
           currentScan.evidence.map((item, index) => {
             const rows = item.evidence ? (Array.isArray(item.evidence) ? item.evidence : []) : [];
@@ -131,7 +131,7 @@ export function Evidence() {
                   />
                 </div>
 
-                {item.warning ? <p className="text-xs text-amber-300/90 pt-0.5">{item.warning}</p> : null}
+                {item.warning ? <p className="text-xs text-amber-600/90 dark:text-amber-300/90 pt-0.5">{item.warning}</p> : null}
 
               </div>
             );
@@ -143,7 +143,7 @@ export function Evidence() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <section className="glass-card p-5 border border-border rounded-xl">
           <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">Risk Findings</h3>
           <div className="space-y-3">
@@ -182,7 +182,7 @@ export function Evidence() {
 
           {overlapWarnings.length > 0 && (
             <div>
-              <h4 className="text-[10px] font-bold text-amber-300/90 uppercase tracking-widest mb-2">Continuity / overlap</h4>
+              <h4 className="text-[10px] font-bold text-amber-600/90 dark:text-amber-300/90 uppercase tracking-widest mb-2">Continuity / overlap</h4>
               <ul className="text-xs text-muted-foreground space-y-1.5 list-disc pl-4">
                 {overlapWarnings.map((o, i) => (
                   <li key={i}>{o}</li>
